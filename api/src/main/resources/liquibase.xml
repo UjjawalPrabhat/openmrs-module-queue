@@ -766,7 +766,7 @@
             <column name="min_occurs" valueNumeric="0"/>
             <column name="max_occurs" valueNumeric="1"/>
             <column name="creator" valueNumeric="1"/>
-            <column name="date_created" valueDate="NOW()"/>
+            <column name="date_created" valueComputed="NOW()"/>
             <column name="retired" valueBoolean="false"/>
             <column name="uuid" value="c0c579b0-8e59-401d-8a4a-976a0b183519"/>
         </insert>
