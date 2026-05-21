@@ -749,4 +749,27 @@
         </sql>
     </changeSet>
 
+    <changeSet id="add_visit_queue_number_attribute_type_20260521" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM visit_attribute_type WHERE uuid = 'c0c579b0-8e59-401d-8a4a-976a0b183519';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Insert the "Visit Queue Number" visit attribute type used by the queue screen to display ticket numbers.
+            UUID matches the default value of `visitQueueNumberAttributeUuid` in @openmrs/esm-service-queues-app.
+        </comment>
+        <insert tableName="visit_attribute_type">
+            <column name="name" value="Visit Queue Number"/>
+            <column name="description" value="The visit queue number used to identify patients on the queue screen"/>
+            <column name="datatype" value="org.openmrs.customdatatype.datatype.FreeTextDatatype"/>
+            <column name="min_occurs" valueNumeric="0"/>
+            <column name="max_occurs" valueNumeric="1"/>
+            <column name="creator" valueNumeric="1"/>
+            <column name="date_created" valueDate="NOW()"/>
+            <column name="retired" valueBoolean="false"/>
+            <column name="uuid" value="c0c579b0-8e59-401d-8a4a-976a0b183519"/>
+        </insert>
+    </changeSet>
+
 </databaseChangeLog>
