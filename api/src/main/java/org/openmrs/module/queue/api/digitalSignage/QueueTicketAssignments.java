@@ -11,6 +11,7 @@ package org.openmrs.module.queue.api.digitalSignage;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -25,7 +26,7 @@ public class QueueTicketAssignments {
 	 * The object has: service point/room name as key for ease of search and update and object with
 	 * status and ticket number
 	 */
-	private static final Map<String, TicketAssignment> ACTIVE_QUEUE_TICKETS = new HashMap<>();
+	private static final Map<String, TicketAssignment> ACTIVE_QUEUE_TICKETS = new ConcurrentHashMap<>();
 	
 	/**
 	 * We want to control access to the ACTIVE_QUEUE_TICKETS so that requests are queued
