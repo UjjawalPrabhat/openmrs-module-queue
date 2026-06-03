@@ -429,6 +429,11 @@ public class QueueEntryResourceTest extends BaseQueueResourceTest<QueueEntry, Qu
 	}
 	
 	@Test
+	public void shouldReturnUuidForDisplayWhenPatientIsNull() {
+		assertThat(resource.getDisplay(queueEntry), is(QUEUE_ENTRY_UUID));
+	}
+	
+	@Test
 	public void shouldInstantiateNewDelegate() {
 		assertThat(getResource().newDelegate(), notNullValue());
 	}
