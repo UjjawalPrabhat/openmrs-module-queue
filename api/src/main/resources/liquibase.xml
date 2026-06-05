@@ -749,4 +749,25 @@
         </sql>
     </changeSet>
 
+    <changeSet id="add_queue_entry_indexes_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_started_ended_idx"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add indexes to queue_entry (queue_id, patient_id, and composite started_at/ended_at)
+        </comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_queue_id_idx">
+            <column name="queue_id"/>
+        </createIndex>
+        <createIndex tableName="queue_entry" indexName="queue_entry_started_ended_idx">
+            <column name="started_at"/>
+            <column name="ended_at"/>
+        </createIndex>
+        <createIndex tableName="queue_entry" indexName="queue_entry_patient_id_idx">
+            <column name="patient_id"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>
