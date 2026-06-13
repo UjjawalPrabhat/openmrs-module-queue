@@ -134,6 +134,7 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 		queueEntryTransition.setTransitionDate(transitionDate);
 		
 		QueueEntry queueEntryToStart = queueEntryTransition.constructNewQueueEntry();
+		queueEntryToStart.setPreviousQueueEntry(queueEntryToStop);
 		
 		// Use optimistic locking to end the current entry
 		queueEntryToStop.setEndedAt(transitionDate);
@@ -295,27 +296,6 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 	@Override
 	@Transactional(readOnly = true)
 	public QueueEntry getPreviousQueueEntry(@NotNull QueueEntry queueEntry) {
-		Queue queueComingFrom = queueEntry.getQueueComingFrom();
-		if (queueComingFrom == null) {
-			return null;
-		}
-		
-		QueueEntrySearchCriteria criteria = new QueueEntrySearchCriteria();
-		criteria.setPatient(queueEntry.getPatient());
-		criteria.setVisit(queueEntry.getVisit());
-		criteria.setEndedOn(queueEntry.getStartedAt());
-		criteria.setQueues(Collections.singletonList(queueComingFrom));
-		
-		List<QueueEntry> prevQueueEntries = dao.getQueueEntries(criteria);
-		
-		if (prevQueueEntries.size() == 1) {
-			return prevQueueEntries.get(0);
-		} else if (prevQueueEntries.size() > 1) {
-			// TODO: Exceptions should be translatable and human readable on the frontend.
-			// See: https://openmrs.atlassian.net/browse/O3-2988
-			throw new IllegalStateException("Multiple previous queue entries found");
-		} else {
-			return null;
-		}
+		return queueEntry.getPreviousQueueEntry();
 	}
 }

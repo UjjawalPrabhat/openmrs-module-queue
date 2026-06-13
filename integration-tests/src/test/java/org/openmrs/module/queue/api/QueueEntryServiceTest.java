@@ -117,4 +117,38 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 		queueEntryService.transitionQueueEntry(transition);
 		assertThat(queueEntryService.getQueueEntryById(2).get().getEndedAt(), is(notNullValue()));
 	}
+	
+	@Test
+	public void getPreviousQueueEntryShouldReturnNullWhenNoPredecessor() {
+		// entry 3 has no previous_queue_entry set
+		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
+		assertThat(queueEntryService.getPreviousQueueEntry(entry3), is(nullValue()));
+	}
+	
+	@Test
+	public void transitionQueueEntryShouldSetPreviousQueueEntryOnTheNewEntry() {
+		QueueEntry queueEntry = queueEntryService.getQueueEntryById(3).get();
+		QueueEntryTransition transition = new QueueEntryTransition();
+		transition.setQueueEntryToTransition(queueEntry);
+		transition.setTransitionDate(new Date());
+		QueueEntry newEntry = queueEntryService.transitionQueueEntry(transition);
+		assertThat(newEntry.getPreviousQueueEntry(), is(notNullValue()));
+		assertThat(newEntry.getPreviousQueueEntry().getQueueEntryId(), is(queueEntry.getQueueEntryId()));
+		assertThat(queueEntryService.getPreviousQueueEntry(newEntry).getQueueEntryId(), is(queueEntry.getQueueEntryId()));
+	}
+	
+	@Test
+	public void undoTransitionShouldResolveThePreviousEntryViaTheColumn() {
+		// Transition entry 3, producing a new entry whose previous (entry 3) is linked via the column.
+		// Undo must resolve that predecessor from the column rather than throwing "no previous queue entry".
+		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
+		QueueEntryTransition transition = new QueueEntryTransition();
+		transition.setQueueEntryToTransition(entry3);
+		transition.setTransitionDate(new Date());
+		QueueEntry newEntry = queueEntryService.transitionQueueEntry(transition);
+		assertThat(queueEntryService.getQueueEntryById(entry3.getQueueEntryId()).get().getEndedAt(), is(notNullValue()));
+		
+		QueueEntry reopened = queueEntryService.undoTransition(newEntry);
+		assertThat(reopened.getQueueEntryId(), is(entry3.getQueueEntryId()));
+	}
 }

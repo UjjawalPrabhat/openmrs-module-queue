@@ -16,7 +16,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -327,7 +326,6 @@ public class QueueEntryServiceTest {
 		transition1.setTransitionDate(date2);
 		QueueEntry queueEntry2 = queueEntryService.transitionQueueEntry(transition1);
 		
-		when(dao.getQueueEntries(any())).thenReturn(Arrays.asList(queueEntry1));
 		User user = new User(1);
 		UserContext userContext = mock(UserContext.class);
 		when(userContext.getAuthenticatedUser()).thenReturn(user);
@@ -453,9 +451,9 @@ public class QueueEntryServiceTest {
 		currentEntry.setPriority(concept1);
 		currentEntry.setStartedAt(date2);
 		currentEntry.setQueueComingFrom(queue1);
+		currentEntry.setPreviousQueueEntry(prevEntry);
 		
 		when(dao.get(2)).thenReturn(Optional.of(currentEntry));
-		when(dao.getQueueEntries(any())).thenReturn(Arrays.asList(prevEntry));
 		when(dao.updateIfUnmodified(any(), any())).thenReturn(false);
 		
 		queueEntryService.undoTransition(currentEntry);
