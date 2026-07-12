@@ -749,4 +749,46 @@
         </sql>
     </changeSet>
 
+    <changeSet id="add_app_service_queues_clinic_administrator_privilege_2026071201" author="ujjawalprabhat" >
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM privilege WHERE privilege='App: Service Queues Clinic Administrator';
+            </sqlCheck>
+        </preConditions>
+        <comment>Add "App: Service Queues Clinic Administrator" privilege</comment>
+        <insert tableName="privilege">
+            <column name="privilege" value="App: Service Queues Clinic Administrator" />
+            <column name="description" value="Grants access to the Service Queues clinic-wide monitoring view" />
+            <column name="uuid" value="5155da75-dc85-4db7-a6ba-6ed0d238d4d3" />
+        </insert>
+    </changeSet>
+
+    <changeSet id="add_app_service_queues_clerk_privilege_2026071202" author="ujjawalprabhat" >
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM privilege WHERE privilege='App: Service Queues Clerk';
+            </sqlCheck>
+        </preConditions>
+        <comment>Add "App: Service Queues Clerk" privilege</comment>
+        <insert tableName="privilege">
+            <column name="privilege" value="App: Service Queues Clerk" />
+            <column name="description" value="Grants access to the Service Queues single-location waiting view for clerks" />
+            <column name="uuid" value="80c2bcc2-778a-4654-b1fd-eb2ff2dfe14e" />
+        </insert>
+    </changeSet>
+
+    <changeSet id="add_app_service_queues_clinician_privilege_2026071203" author="ujjawalprabhat" >
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM privilege WHERE privilege='App: Service Queues Clinician';
+            </sqlCheck>
+        </preConditions>
+        <comment>Add "App: Service Queues Clinician" privilege</comment>
+        <insert tableName="privilege">
+            <column name="privilege" value="App: Service Queues Clinician" />
+            <column name="description" value="Grants access to the Service Queues single-location waiting view for clinicians" />
+            <column name="uuid" value="a1b9a61f-c0bb-4d7d-8347-6766c7ee51de" />
+        </insert>
+    </changeSet>
+
 </databaseChangeLog>
