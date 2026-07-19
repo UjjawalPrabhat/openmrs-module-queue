@@ -20,4 +20,8 @@ public class QueueModuleConstants {
 	public final static String QUEUE_SORT_WEIGHT_GENERATOR = "queue.sortWeightGenerator";
 	
 	public final static String EXISTING_VALUE_SORT_WEIGHT_GENERATOR = "existingValueSortWeightGenerator";
+	
+	public final static String AUTO_CLOSE_QUEUE_ENTRIES_AT_TIME = "queue.autoCloseQueueEntriesAtTime";
+	
+	public final static String AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES = "queue.autoCloseQueueEntriesForQueues";
 }

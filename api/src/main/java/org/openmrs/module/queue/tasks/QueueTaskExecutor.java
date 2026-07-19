@@ -28,7 +28,8 @@ public class QueueTaskExecutor extends ScheduledExecutorFactoryBean {
 	private static final long ONE_MINUTE = ONE_SECOND * 60;
 	
 	public QueueTaskExecutor() {
-		setScheduledExecutorTasks(task(ONE_MINUTE, ONE_MINUTE, AutoCloseVisitQueueEntryTask.class));
+		setScheduledExecutorTasks(task(ONE_MINUTE, ONE_MINUTE, AutoCloseVisitQueueEntryTask.class),
+		    task(ONE_MINUTE, ONE_MINUTE, AutoCloseQueueEntryTask.class));
 	}
 	
 	private ScheduledExecutorTask task(long delay, long period, Class<? extends Runnable> runnable) {
