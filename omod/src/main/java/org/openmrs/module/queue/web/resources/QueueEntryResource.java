@@ -285,11 +285,6 @@ public class QueueEntryResource extends DelegatingCrudResource<QueueEntry> {
 		return (personName == null ? queueEntry.getPatient().toString() : personName.getFullName());
 	}
 	
-	@PropertyGetter("previousQueueEntry")
-	public QueueEntry getPreviousQueueEntry(QueueEntry queueEntry) {
-		return getServices().getQueueEntryService().getPreviousQueueEntry(queueEntry);
-	}
-	
 	@Override
 	public String getResourceVersion() {
 		return "2.3";

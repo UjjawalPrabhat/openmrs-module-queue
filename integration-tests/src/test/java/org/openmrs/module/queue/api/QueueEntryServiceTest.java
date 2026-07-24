@@ -28,6 +28,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.PatientService;
 import org.openmrs.api.ValidationException;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.queue.SpringTestConfiguration;
 import org.openmrs.module.queue.model.Queue;
 import org.openmrs.module.queue.model.QueueEntry;
@@ -119,6 +120,22 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
+	public void getPreviousQueueEntryShouldReadTheLinkBackFromTheDatabase() {
+		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
+		QueueEntryTransition transition = new QueueEntryTransition();
+		transition.setQueueEntryToTransition(entry3);
+		transition.setTransitionDate(new Date());
+		Integer newEntryId = queueEntryService.transitionQueueEntry(transition).getQueueEntryId();
+		Context.flushSession();
+		Context.clearSession();
+		
+		QueueEntry reloaded = queueEntryService.getQueueEntryById(newEntryId).get();
+		QueueEntry previous = queueEntryService.getPreviousQueueEntry(reloaded);
+		assertThat(previous.getQueueEntryId(), is(entry3.getQueueEntryId()));
+		assertThat(previous.getStartedAt(), is(notNullValue()));
+	}
+	
+	@Test
 	public void getPreviousQueueEntryShouldReturnNullWhenNoPredecessor() {
 		// entry 3 has no previous_queue_entry set
 		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
@@ -139,8 +156,7 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 	
 	@Test
 	public void undoTransitionShouldResolveThePreviousEntryViaTheColumn() {
-		// Transition entry 3, producing a new entry whose previous (entry 3) is linked via the column.
-		// Undo must resolve that predecessor from the column rather than throwing "no previous queue entry".
+		// Undo must resolve the predecessor from the column, and must not leave the voided entry claiming one.
 		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
 		QueueEntryTransition transition = new QueueEntryTransition();
 		transition.setQueueEntryToTransition(entry3);
@@ -150,5 +166,6 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 		
 		QueueEntry reopened = queueEntryService.undoTransition(newEntry);
 		assertThat(reopened.getQueueEntryId(), is(entry3.getQueueEntryId()));
+		assertThat(newEntry.getPreviousQueueEntry(), is(nullValue()));
 	}
 }

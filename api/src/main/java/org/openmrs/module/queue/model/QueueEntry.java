@@ -41,6 +41,7 @@ import org.openmrs.Visit;
 @Getter
 @ToString
 @Entity
+@BatchSize(size = 100)
 @Table(name = "queue_entry")
 public class QueueEntry extends BaseChangeableOpenmrsData {
 	
@@ -99,7 +100,6 @@ public class QueueEntry extends BaseChangeableOpenmrsData {
 	@ToString.Exclude
 	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
-	@BatchSize(size = 100)
 	@JoinColumn(name = "previous_queue_entry", referencedColumnName = "queue_entry_id")
 	private QueueEntry previousQueueEntry;
 	

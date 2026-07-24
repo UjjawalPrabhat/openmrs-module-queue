@@ -767,17 +767,15 @@
         <preConditions onFail="MARK_RAN">
             <columnExists tableName="queue_entry" columnName="previous_queue_entry"/>
         </preConditions>
-        <comment>
-            Backfill previous_queue_entry for existing transitioned entries, only where the predecessor
-            (same patient, same visit, queue = queue_coming_from, ended_at = started_at, not voided) is unambiguous.
-        </comment>
+        <comment>Backfill previous_queue_entry for existing entries whose predecessor is unambiguous</comment>
         <sql>
             update queue_entry curr
             inner join (
                 select curr2.queue_entry_id as curr_id, min(prev.queue_entry_id) as prev_id, count(*) as n
                 from queue_entry curr2
                 inner join queue_entry prev
-                    on prev.patient_id = curr2.patient_id
+                    on prev.queue_entry_id <> curr2.queue_entry_id
+                    and prev.patient_id = curr2.patient_id
                     and prev.queue_id = curr2.queue_coming_from
                     and prev.ended_at = curr2.started_at
                     and prev.voided = 0
@@ -793,10 +791,7 @@
         <preConditions onFail="MARK_RAN">
             <columnExists tableName="queue_entry" columnName="previous_queue_entry"/>
         </preConditions>
-        <comment>
-            Backfill previous_queue_entry for existing transitioned entries, only where the predecessor
-            (same patient, same visit, queue = queue_coming_from, ended_at = started_at, not voided) is unambiguous.
-        </comment>
+        <comment>Backfill previous_queue_entry for existing entries whose predecessor is unambiguous</comment>
         <sql>
             UPDATE queue_entry curr
             SET previous_queue_entry = m.prev_id
@@ -804,7 +799,8 @@
                 SELECT curr2.queue_entry_id AS curr_id, MIN(prev.queue_entry_id) AS prev_id, COUNT(*) AS n
                 FROM queue_entry curr2
                 JOIN queue_entry prev
-                    ON prev.patient_id = curr2.patient_id
+                    ON prev.queue_entry_id <> curr2.queue_entry_id
+                    AND prev.patient_id = curr2.patient_id
                     AND prev.queue_id = curr2.queue_coming_from
                     AND prev.ended_at = curr2.started_at
                     AND prev.voided = false

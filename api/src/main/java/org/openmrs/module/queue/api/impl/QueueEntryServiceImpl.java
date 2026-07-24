@@ -93,6 +93,9 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 	public QueueEntry saveQueueEntry(QueueEntry queueEntry) {
 		Double sortWeight = getSortWeightGenerator().generateSortWeight(queueEntry);
 		queueEntry.setSortWeight(sortWeight);
+		if (queueEntry.getId() == null && queueEntry.getPreviousQueueEntry() == null) {
+			queueEntry.setPreviousQueueEntry(resolvePreviousQueueEntry(queueEntry));
+		}
 		return dao.createOrUpdate(queueEntry);
 	}
 	
@@ -134,7 +137,6 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 		queueEntryTransition.setTransitionDate(transitionDate);
 		
 		QueueEntry queueEntryToStart = queueEntryTransition.constructNewQueueEntry();
-		queueEntryToStart.setPreviousQueueEntry(queueEntryToStop);
 		
 		// Use optimistic locking to end the current entry
 		queueEntryToStop.setEndedAt(transitionDate);
@@ -184,6 +186,8 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 			throw new IllegalStateException("Previous queue entry was modified by another transaction");
 		}
 		
+		// Cleared before voiding so that voidQueueEntry's own save persists it, rather than a second write
+		queueEntry.setPreviousQueueEntry(null);
 		getProxiedQueueEntryService().voidQueueEntry(queueEntry, "Transition undone");
 		
 		// Reload the previous entry to return the updated state
@@ -297,5 +301,22 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 	@Transactional(readOnly = true)
 	public QueueEntry getPreviousQueueEntry(@NotNull QueueEntry queueEntry) {
 		return queueEntry.getPreviousQueueEntry();
+	}
+	
+	// Resolves the predecessor from queueComingFrom, returning null if there is no unambiguous match.
+	private QueueEntry resolvePreviousQueueEntry(QueueEntry queueEntry) {
+		Queue queueComingFrom = queueEntry.getQueueComingFrom();
+		if (queueComingFrom == null) {
+			return null;
+		}
+		
+		QueueEntrySearchCriteria criteria = new QueueEntrySearchCriteria();
+		criteria.setPatient(queueEntry.getPatient());
+		criteria.setVisit(queueEntry.getVisit());
+		criteria.setEndedOn(queueEntry.getStartedAt());
+		criteria.setQueues(Collections.singletonList(queueComingFrom));
+		
+		List<QueueEntry> prevQueueEntries = dao.getQueueEntries(criteria);
+		return prevQueueEntries.size() == 1 ? prevQueueEntries.get(0) : null;
 	}
 }

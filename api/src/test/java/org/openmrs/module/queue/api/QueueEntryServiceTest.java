@@ -16,7 +16,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -129,6 +131,56 @@ public class QueueEntryServiceTest {
 		assertThat(result.getQueueEntryId(), is(QUEUE_ENTRY_ID));
 		assertThat(result.getStatus(), is(conceptStatus));
 		assertThat(result.getPriority(), is(conceptPriority));
+	}
+	
+	@Test
+	public void saveQueueEntryShouldResolvePreviousEntryFromQueueComingFrom() {
+		Queue queueComingFrom = new Queue();
+		Patient patient = new Patient();
+		Visit visit = new Visit();
+		Date startedAt = DateUtils.truncate(new Date(), Calendar.SECOND);
+		
+		QueueEntry prevEntry = new QueueEntry();
+		prevEntry.setQueueEntryId(1);
+		
+		QueueEntry newEntry = new QueueEntry();
+		newEntry.setQueue(new Queue());
+		newEntry.setPatient(patient);
+		newEntry.setVisit(visit);
+		newEntry.setStatus(new Concept());
+		newEntry.setPriority(new Concept());
+		newEntry.setStartedAt(startedAt);
+		newEntry.setQueueComingFrom(queueComingFrom);
+		
+		when(dao.getQueueEntries(any())).thenReturn(Collections.singletonList(prevEntry));
+		when(dao.createOrUpdate(any())).thenAnswer(invocation -> invocation.getArgument(0));
+		
+		QueueEntry result = queueEntryService.saveQueueEntry(newEntry);
+		
+		assertThat(result.getPreviousQueueEntry(), equalTo(prevEntry));
+	}
+	
+	@Test
+	public void saveQueueEntryShouldNotSetPreviousEntryWhenMatchIsAmbiguous() {
+		QueueEntry candidate1 = new QueueEntry();
+		candidate1.setQueueEntryId(1);
+		QueueEntry candidate2 = new QueueEntry();
+		candidate2.setQueueEntryId(2);
+		
+		QueueEntry newEntry = new QueueEntry();
+		newEntry.setQueue(new Queue());
+		newEntry.setPatient(new Patient());
+		newEntry.setStatus(new Concept());
+		newEntry.setPriority(new Concept());
+		newEntry.setStartedAt(DateUtils.truncate(new Date(), Calendar.SECOND));
+		newEntry.setQueueComingFrom(new Queue());
+		
+		when(dao.getQueueEntries(any())).thenReturn(Arrays.asList(candidate1, candidate2));
+		when(dao.createOrUpdate(any())).thenAnswer(invocation -> invocation.getArgument(0));
+		
+		QueueEntry result = queueEntryService.saveQueueEntry(newEntry);
+		
+		assertNull(result.getPreviousQueueEntry());
 	}
 	
 	@Test
@@ -246,6 +298,7 @@ public class QueueEntryServiceTest {
 		assertThat(queueEntry2.getQueueComingFrom(), equalTo(queue1));
 		assertThat(queueEntry2.getStartedAt(), equalTo(date2));
 		assertNull(queueEntry2.getEndedAt());
+		assertThat(queueEntry2.getPreviousQueueEntry(), equalTo(queueEntry1));
 		
 		// Next transition test that appropriate fields can be changed
 		QueueEntryTransition transition2 = new QueueEntryTransition();
@@ -269,6 +322,7 @@ public class QueueEntryServiceTest {
 		assertThat(queueEntry3.getQueueComingFrom(), equalTo(queue1));
 		assertThat(queueEntry3.getStartedAt(), equalTo(date3));
 		assertNull(queueEntry3.getEndedAt());
+		assertThat(queueEntry3.getPreviousQueueEntry(), equalTo(queueEntry2));
 	}
 	
 	@Test
@@ -325,6 +379,7 @@ public class QueueEntryServiceTest {
 		transition1.setQueueEntryToTransition(queueEntry1);
 		transition1.setTransitionDate(date2);
 		QueueEntry queueEntry2 = queueEntryService.transitionQueueEntry(transition1);
+		assertThat(queueEntry2.getPreviousQueueEntry(), equalTo(queueEntry1));
 		
 		User user = new User(1);
 		UserContext userContext = mock(UserContext.class);
@@ -335,6 +390,7 @@ public class QueueEntryServiceTest {
 			queueEntryService.undoTransition(queueEntry2);
 			
 			assertThat(queueEntry2.getVoided(), equalTo(true));
+			assertNull(queueEntry2.getPreviousQueueEntry());
 			assertNull(queueEntry1.getEndedAt());
 		}
 		finally {
