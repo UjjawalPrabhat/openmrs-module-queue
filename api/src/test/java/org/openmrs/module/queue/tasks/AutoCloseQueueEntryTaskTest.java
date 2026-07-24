@@ -86,6 +86,15 @@ public class AutoCloseQueueEntryTaskTest {
 	}
 	
 	@Test
+	public void shouldDoNothingWhenTimeIsUnparseable() throws Exception {
+		configuredTime = "nonsense";
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), nullValue());
+	}
+	
+	@Test
 	public void shouldNotClearBeforeConfiguredTime() throws Exception {
 		configuredTime = "23:59";
 		now = getDate("2020-01-01 17:00");

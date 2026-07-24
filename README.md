@@ -69,6 +69,32 @@ A typical set of priorities might include:  `Normal` and `Emergency`
 This provides a means to configure the sort weight generator that maintains the primary ordering of Queue Entries on
 a particular Queue.  By default, the `existingValueSortWeightGenerator` will be utilized.
 
+#### queue.autoCloseQueueEntriesAtTime
+
+**Default Value:**  `23:59`
+
+**Required?**  False
+
+**Description:**  
+The time of day, in `HH:mm` 24-hour format and the server's local time, at which active queue entries are
+automatically ended each day. A scheduled task ends every queue entry that was still active as of this time; entries
+started later in the day are left untouched. Leave this property blank to disable automatic clearing entirely.
+
+**⚠️ Note for existing deployments:** Because this ships with a default of `23:59`, deployments that upgrade to this
+version will begin automatically clearing queue entries at end of day as soon as they pick up the new version. Blank
+this property (or restrict it via `queue.autoCloseQueueEntriesForQueues`) if that is not the desired behavior.
+
+#### queue.autoCloseQueueEntriesForQueues
+
+**Default Value:**  None (empty)
+
+**Required?**  False
+
+**Description:**  
+A comma-separated list of queue uuids whose entries are automatically ended at the time configured by
+`queue.autoCloseQueueEntriesAtTime`. Leave this property blank to clear entries in **all** queues. Unknown uuids are
+logged and skipped rather than aborting the task.
+
 ### Sort Weight Generators
 
 As described above in Global Property configuration, one can configure the specific algorithm to use to generate and 

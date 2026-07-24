@@ -14,9 +14,11 @@ import static org.openmrs.module.queue.QueueModuleConstants.AUTO_CLOSE_QUEUE_ENT
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -37,18 +39,16 @@ public class AutoCloseQueueEntryTask implements Runnable {
 	
 	private static final String TIME_FORMAT = "HH:mm";
 	
-	private static volatile boolean currentlyExecuting = false;
+	private static final AtomicBoolean currentlyExecuting = new AtomicBoolean(false);
 	
 	@Override
 	public void run() {
-		if (currentlyExecuting) {
+		if (!currentlyExecuting.compareAndSet(false, true)) {
 			log.debug("AutoCloseQueueEntryTask is still executing, not running again");
 			return;
 		}
 		log.debug("Executing AutoCloseQueueEntryTask");
 		try {
-			currentlyExecuting = true;
-			
 			String configuredTime = getConfiguredCloseTime();
 			if (StringUtils.isBlank(configuredTime)) {
 				log.debug("No auto-close time configured, not clearing any queue entries");
@@ -79,18 +79,26 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			List<QueueEntry> queueEntries = getQueueEntries(criteria);
 			log.debug("There are {} queue entries to auto-close", queueEntries.size());
 			for (QueueEntry queueEntry : queueEntries) {
-				try {
-					queueEntry.setEndedAt(now);
-					saveQueueEntry(queueEntry);
-					log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
-				}
-				catch (Exception e) {
-					log.warn("Unable to auto-close queue entry {}", queueEntry.getQueueEntryId(), e);
-				}
+				closeQueueEntry(queueEntry, now);
 			}
 		}
+		catch (Exception e) {
+			log.error("AutoCloseQueueEntryTask failed to complete", e);
+		}
 		finally {
-			currentlyExecuting = false;
+			currentlyExecuting.set(false);
+		}
+	}
+	
+	private void closeQueueEntry(QueueEntry queueEntry, Date endedAt) {
+		try {
+			queueEntry.setEndedAt(endedAt);
+			saveQueueEntry(queueEntry);
+			log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
+		}
+		catch (Exception e) {
+			Context.evictFromSession(queueEntry);
+			log.warn("Unable to auto-close queue entry {}", queueEntry.getQueueEntryId(), e);
 		}
 	}
 	
@@ -137,7 +145,21 @@ public class AutoCloseQueueEntryTask implements Runnable {
 		if (StringUtils.isBlank(configuredQueues)) {
 			return null;
 		}
-		return getServices().getQueues(configuredQueues.split(","));
+		List<Queue> queues = new ArrayList<>();
+		for (String queueRef : configuredQueues.split(",")) {
+			String trimmed = queueRef.trim();
+			if (StringUtils.isBlank(trimmed)) {
+				continue;
+			}
+			try {
+				queues.add(getServices().getQueue(trimmed));
+			}
+			catch (IllegalArgumentException e) {
+				log.warn("Ignoring unknown queue '{}' configured in global property {}", trimmed,
+				    AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES);
+			}
+		}
+		return queues;
 	}
 	
 	/**
