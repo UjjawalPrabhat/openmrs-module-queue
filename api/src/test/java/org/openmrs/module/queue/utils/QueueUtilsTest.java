@@ -11,10 +11,14 @@ package org.openmrs.module.queue.utils;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 import org.junit.Test;
+import org.openmrs.module.queue.model.QueueEntry;
 
 public class QueueUtilsTest {
 	
@@ -51,5 +55,32 @@ public class QueueUtilsTest {
 		assertThat(QueueUtils.datesOverlap(AUG_2, AUG_4, AUG_1, AUG_3), is(true)); // one starts within two
 		assertThat(QueueUtils.datesOverlap(AUG_3, AUG_4, AUG_1, AUG_2), is(false)); // one after two
 		assertThat(QueueUtils.datesOverlap(AUG_1, AUG_2, AUG_1, AUG_3), is(true)); // one starts when two starts
+	}
+	
+	@Test
+	public void shouldComputeAverageWaitTimeInMinutes() {
+		// Entries that waited 24 and 48 hours average out to 36 hours
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, AUG_2), entry(AUG_1, AUG_3))),
+		    is(2160.0));
+		
+		// Entries that have not ended yet are not part of the average
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, AUG_2), entry(AUG_1, NULL))), is(1440.0));
+		
+		// Test that there is no average to report rather than dividing by zero and returning NaN
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, NULL), entry(AUG_2, NULL))),
+		    is(nullValue()));
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries()), is(nullValue()));
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(null), is(nullValue()));
+	}
+	
+	private List<QueueEntry> entries(QueueEntry... queueEntries) {
+		return Arrays.asList(queueEntries);
+	}
+	
+	private QueueEntry entry(Date startedAt, Date endedAt) {
+		QueueEntry queueEntry = new QueueEntry();
+		queueEntry.setStartedAt(startedAt);
+		queueEntry.setEndedAt(endedAt);
+		return queueEntry;
 	}
 }
