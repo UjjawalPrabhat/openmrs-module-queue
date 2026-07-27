@@ -10,9 +10,14 @@
 package org.openmrs.module.queue.tasks;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.openmrs.module.queue.QueueModuleConstants.AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -23,6 +28,8 @@ import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.api.AdministrationService;
+import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
 import org.openmrs.module.queue.model.Queue;
 import org.openmrs.module.queue.model.QueueEntry;
@@ -57,7 +64,8 @@ public class AutoCloseQueueEntryTaskTest {
 		@Override
 		protected List<QueueEntry> getQueueEntries(QueueEntrySearchCriteria criteria) {
 			// Emulate the DB-level filtering that getQueueEntries would normally perform
-			return queueEntries.stream().filter(e -> e.getEndedAt() == null)
+			return queueEntries.stream()
+			        .filter(e -> criteria.getIsEnded() == null || criteria.getIsEnded().equals(e.getEndedAt() != null))
 			        .filter(e -> e.getStartedAt() == null || !e.getStartedAt().after(criteria.getStartedOnOrBefore()))
 			        .filter(e -> criteria.getQueues() == null || criteria.getQueues().contains(e.getQueue()))
 			        .collect(Collectors.toList());
@@ -95,6 +103,15 @@ public class AutoCloseQueueEntryTaskTest {
 	}
 	
 	@Test
+	public void shouldDoNothingWhenTimeHasTrailingCharacters() throws Exception {
+		configuredTime = "11:00 PM";
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), nullValue());
+	}
+	
+	@Test
 	public void shouldNotClearBeforeConfiguredTime() throws Exception {
 		configuredTime = "23:59";
 		now = getDate("2020-01-01 17:00");
@@ -111,6 +128,37 @@ public class AutoCloseQueueEntryTaskTest {
 		
 		new TestAutoCloseQueueEntryTask().run();
 		assertThat(queueEntry.getEndedAt(), equalTo(now));
+	}
+	
+	@Test
+	public void shouldClearEntriesWhenTheConfiguredTimeWasMissed() throws Exception {
+		configuredTime = "23:59";
+		now = getDate("2020-01-02 08:00");
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), equalTo(now));
+	}
+	
+	@Test
+	public void shouldNotClearEntriesStartedAfterTheMostRecentCloseTime() throws Exception {
+		configuredTime = "23:59";
+		now = getDate("2020-01-02 08:00");
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-02 07:00", null);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), nullValue());
+	}
+	
+	@Test
+	public void shouldNotRewriteEntriesThatAreAlreadyEnded() throws Exception {
+		configuredTime = "23:59";
+		Date alreadyEndedAt = getDate("2020-01-01 10:00");
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
+		queueEntry.setEndedAt(alreadyEndedAt);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), equalTo(alreadyEndedAt));
 	}
 	
 	@Test
@@ -139,6 +187,58 @@ public class AutoCloseQueueEntryTaskTest {
 		new TestAutoCloseQueueEntryTask().run();
 		assertThat(inQueueA.getEndedAt(), notNullValue());
 		assertThat(inQueueB.getEndedAt(), nullValue());
+	}
+	
+	@Test
+	public void getQueuesToClearShouldReturnNullWhenNoQueuesAreConfigured() {
+		assertThat(taskForConfiguredQueues("  ").getQueuesToClear(), nullValue());
+	}
+	
+	@Test
+	public void getQueuesToClearShouldResolveConfiguredUuids() {
+		Queue queueA = new Queue();
+		Queue queueB = new Queue();
+		AutoCloseQueueEntryTask task = taskForConfiguredQueues(" uuid-a , ,uuid-b,");
+		when(task.getServices().getQueue("uuid-a")).thenReturn(queueA);
+		when(task.getServices().getQueue("uuid-b")).thenReturn(queueB);
+		
+		assertThat(task.getQueuesToClear(), contains(queueA, queueB));
+	}
+	
+	@Test
+	public void getQueuesToClearShouldSkipUnknownUuids() {
+		Queue queueA = new Queue();
+		AutoCloseQueueEntryTask task = taskForConfiguredQueues("uuid-a,not-a-queue");
+		when(task.getServices().getQueue("uuid-a")).thenReturn(queueA);
+		when(task.getServices().getQueue("not-a-queue")).thenThrow(new IllegalArgumentException());
+		
+		assertThat(task.getQueuesToClear(), contains(queueA));
+	}
+	
+	@Test
+	public void getQueuesToClearShouldReturnEmptyListWhenNoConfiguredUuidResolves() {
+		AutoCloseQueueEntryTask task = taskForConfiguredQueues("not-a-queue");
+		when(task.getServices().getQueue("not-a-queue")).thenThrow(new IllegalArgumentException());
+		
+		assertThat(task.getQueuesToClear(), empty());
+	}
+	
+	/**
+	 * @return a task whose services report the given value for the configured queues global property,
+	 *         so that the real {@link AutoCloseQueueEntryTask#getQueuesToClear()} is exercised
+	 */
+	private AutoCloseQueueEntryTask taskForConfiguredQueues(String configuredQueueUuids) {
+		QueueServicesWrapper services = mock(QueueServicesWrapper.class);
+		AdministrationService administrationService = mock(AdministrationService.class);
+		when(services.getAdministrationService()).thenReturn(administrationService);
+		when(administrationService.getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES)).thenReturn(configuredQueueUuids);
+		return new AutoCloseQueueEntryTask() {
+			
+			@Override
+			protected QueueServicesWrapper getServices() {
+				return services;
+			}
+		};
 	}
 	
 	private QueueEntry queueEntryStartedAt(String startedAt, Queue queue) throws Exception {

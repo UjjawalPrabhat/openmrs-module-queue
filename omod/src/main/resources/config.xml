@@ -57,8 +57,8 @@
     </globalProperty>
     <globalProperty>
         <property>${project.parent.artifactId}.autoCloseQueueEntriesAtTime</property>
-        <defaultValue>23:59</defaultValue>
-        <description>Time of day (HH:mm, server local time) at which active queue entries are automatically ended each day. Leave blank to disable automatic clearing.</description>
+        <defaultValue></defaultValue>
+        <description>Time of day (HH:mm, server local time) at which active queue entries are automatically ended each day. Blank by default, which disables automatic clearing; an outpatient clinic that wants its queues cleared at end of day would set this to 23:59.</description>
     </globalProperty>
     <globalProperty>
         <property>${project.parent.artifactId}.autoCloseQueueEntriesForQueues</property>

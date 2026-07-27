@@ -12,7 +12,7 @@ package org.openmrs.module.queue.tasks;
 import static org.openmrs.module.queue.QueueModuleConstants.AUTO_CLOSE_QUEUE_ENTRIES_AT_TIME;
 import static org.openmrs.module.queue.QueueModuleConstants.AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES;
 
-import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.openmrs.api.ValidationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
@@ -30,9 +31,10 @@ import org.openmrs.module.queue.model.QueueEntry;
 
 /**
  * This ends all active queue entries in the configured queues once per day at a configured time of
- * day (default: end of day). The set of queues to clear and the time to clear them are both
- * controlled by global properties. Only entries that were already active at the configured time are
- * ended, so patients added later in the day are left in the queue.
+ * day. The set of queues to clear and the time to clear them are both controlled by global
+ * properties, and nothing is cleared unless a time has been configured. Each run works from the
+ * most recent occurrence of that time rather than from the current tick, so patients added since
+ * then are left in the queue and a run missed at the configured time is caught up by the next one.
  */
 @Slf4j
 public class AutoCloseQueueEntryTask implements Runnable {
@@ -56,12 +58,8 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			}
 			
 			Date now = now();
-			Date closeTime = getCloseTimeForToday(configuredTime.trim(), now);
+			Date closeTime = getMostRecentCloseTime(configuredTime.trim(), now);
 			if (closeTime == null) {
-				return;
-			}
-			if (now.before(closeTime)) {
-				log.debug("Current time is before the configured auto-close time {}, nothing to do", configuredTime);
 				return;
 			}
 			
@@ -72,7 +70,7 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			}
 			
 			QueueEntrySearchCriteria criteria = new QueueEntrySearchCriteria();
-			criteria.setIsEnded(Boolean.FALSE);
+			criteria.setIsEnded(false);
 			criteria.setStartedOnOrBefore(closeTime);
 			criteria.setQueues(queues);
 			
@@ -96,6 +94,10 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			saveQueueEntry(queueEntry);
 			log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
 		}
+		catch (ValidationException ve) {
+			Context.evictFromSession(queueEntry);
+			log.warn("Unable to auto-close queue entry {}: {}", queueEntry.getQueueEntryId(), ve.getMessage());
+		}
 		catch (Exception e) {
 			Context.evictFromSession(queueEntry);
 			log.warn("Unable to auto-close queue entry {}", queueEntry.getQueueEntryId(), e);
@@ -103,29 +105,33 @@ public class AutoCloseQueueEntryTask implements Runnable {
 	}
 	
 	/**
-	 * Parses the configured HH:mm time and returns the corresponding instant on the same day as the
-	 * given reference date. Returns null if the configured value cannot be parsed.
+	 * Parses the configured HH:mm time and returns the most recent instant at which that time of day
+	 * occurred: today's occurrence if it has already passed, otherwise yesterday's. Returns null if the
+	 * configured value cannot be parsed.
 	 */
-	protected Date getCloseTimeForToday(String configuredTime, Date referenceDate) {
-		try {
-			SimpleDateFormat format = new SimpleDateFormat(TIME_FORMAT);
-			format.setLenient(false);
-			Calendar parsed = Calendar.getInstance();
-			parsed.setTime(format.parse(configuredTime));
-			
-			Calendar closeTime = Calendar.getInstance();
-			closeTime.setTime(referenceDate);
-			closeTime.set(Calendar.HOUR_OF_DAY, parsed.get(Calendar.HOUR_OF_DAY));
-			closeTime.set(Calendar.MINUTE, parsed.get(Calendar.MINUTE));
-			closeTime.set(Calendar.SECOND, 0);
-			closeTime.set(Calendar.MILLISECOND, 0);
-			return closeTime.getTime();
-		}
-		catch (ParseException e) {
+	protected Date getMostRecentCloseTime(String configuredTime, Date referenceDate) {
+		SimpleDateFormat format = new SimpleDateFormat(TIME_FORMAT);
+		format.setLenient(false);
+		ParsePosition position = new ParsePosition(0);
+		Date parsedTime = format.parse(configuredTime, position);
+		if (parsedTime == null || position.getIndex() != configuredTime.length()) {
 			log.warn("Invalid value '{}' for global property {}, expected format {}", configuredTime,
 			    AUTO_CLOSE_QUEUE_ENTRIES_AT_TIME, TIME_FORMAT);
 			return null;
 		}
+		Calendar parsed = Calendar.getInstance();
+		parsed.setTime(parsedTime);
+		
+		Calendar closeTime = Calendar.getInstance();
+		closeTime.setTime(referenceDate);
+		closeTime.set(Calendar.HOUR_OF_DAY, parsed.get(Calendar.HOUR_OF_DAY));
+		closeTime.set(Calendar.MINUTE, parsed.get(Calendar.MINUTE));
+		closeTime.set(Calendar.SECOND, 0);
+		closeTime.set(Calendar.MILLISECOND, 0);
+		if (closeTime.getTime().after(referenceDate)) {
+			closeTime.add(Calendar.DATE, -1);
+		}
+		return closeTime.getTime();
 	}
 	
 	/**
