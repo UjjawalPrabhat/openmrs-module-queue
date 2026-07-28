@@ -28,7 +28,9 @@ import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.openmrs.api.APIException;
 import org.openmrs.api.AdministrationService;
+import org.openmrs.api.ValidationException;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
 import org.openmrs.module.queue.model.Queue;
@@ -43,6 +45,12 @@ public class AutoCloseQueueEntryTaskTest {
 	private List<Queue> configuredQueues;
 	
 	private Date now;
+	
+	private final List<QueueEntry> evictedFromSession = new ArrayList<>();
+	
+	private QueueEntry saveFailsFor;
+	
+	private RuntimeException saveFailure;
 	
 	class TestAutoCloseQueueEntryTask extends AutoCloseQueueEntryTask {
 		
@@ -73,14 +81,24 @@ public class AutoCloseQueueEntryTaskTest {
 		
 		@Override
 		protected void saveQueueEntry(QueueEntry queueEntry) {
-			// Do nothing
+			if (queueEntry == saveFailsFor) {
+				throw saveFailure;
+			}
+		}
+		
+		@Override
+		protected void evictFromSession(QueueEntry queueEntry) {
+			evictedFromSession.add(queueEntry);
 		}
 	}
 	
 	@Before
 	public void setup() throws Exception {
 		queueEntries.clear();
+		evictedFromSession.clear();
 		configuredQueues = null;
+		saveFailsFor = null;
+		saveFailure = null;
 		now = getDate("2020-01-01 23:59");
 	}
 	
@@ -187,6 +205,32 @@ public class AutoCloseQueueEntryTaskTest {
 		new TestAutoCloseQueueEntryTask().run();
 		assertThat(inQueueA.getEndedAt(), notNullValue());
 		assertThat(inQueueB.getEndedAt(), nullValue());
+	}
+	
+	@Test
+	public void shouldEvictAndContinueWhenValidationRejectsAnEntry() throws Exception {
+		configuredTime = "23:59";
+		QueueEntry rejected = queueEntryStartedAt("2020-01-01 09:00", null);
+		QueueEntry saved = queueEntryStartedAt("2020-01-01 10:00", null);
+		saveFailsFor = rejected;
+		saveFailure = new ValidationException("endedAt is after the visit stop date");
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(evictedFromSession, contains(rejected));
+		assertThat(saved.getEndedAt(), equalTo(now));
+	}
+	
+	@Test
+	public void shouldEvictAndContinueWhenSavingAnEntryFails() throws Exception {
+		configuredTime = "23:59";
+		QueueEntry failed = queueEntryStartedAt("2020-01-01 09:00", null);
+		QueueEntry saved = queueEntryStartedAt("2020-01-01 10:00", null);
+		saveFailsFor = failed;
+		saveFailure = new APIException("could not save");
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(evictedFromSession, contains(failed));
+		assertThat(saved.getEndedAt(), equalTo(now));
 	}
 	
 	@Test

@@ -95,11 +95,11 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
 		}
 		catch (ValidationException ve) {
-			Context.evictFromSession(queueEntry);
+			evictFromSession(queueEntry);
 			log.warn("Unable to auto-close queue entry {}: {}", queueEntry.getQueueEntryId(), ve.getMessage());
 		}
 		catch (Exception e) {
-			Context.evictFromSession(queueEntry);
+			evictFromSession(queueEntry);
 			log.warn("Unable to auto-close queue entry {}", queueEntry.getQueueEntryId(), e);
 		}
 	}
@@ -181,6 +181,13 @@ public class AutoCloseQueueEntryTask implements Runnable {
 	 */
 	protected void saveQueueEntry(QueueEntry queueEntry) {
 		getServices().getQueueEntryService().saveQueueEntry(queueEntry);
+	}
+	
+	/**
+	 * @param queueEntry the QueueEntry to evict from the current Hibernate session
+	 */
+	protected void evictFromSession(QueueEntry queueEntry) {
+		Context.evictFromSession(queueEntry);
 	}
 	
 	/**
