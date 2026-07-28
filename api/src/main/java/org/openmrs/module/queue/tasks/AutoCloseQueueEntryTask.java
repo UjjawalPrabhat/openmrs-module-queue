@@ -77,7 +77,7 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			List<QueueEntry> queueEntries = getQueueEntries(criteria);
 			log.debug("There are {} queue entries to auto-close", queueEntries.size());
 			for (QueueEntry queueEntry : queueEntries) {
-				closeQueueEntry(queueEntry, now);
+				closeQueueEntry(queueEntry, closeTime);
 			}
 		}
 		catch (Exception e) {
@@ -88,8 +88,13 @@ public class AutoCloseQueueEntryTask implements Runnable {
 		}
 	}
 	
-	private void closeQueueEntry(QueueEntry queueEntry, Date endedAt) {
+	private void closeQueueEntry(QueueEntry queueEntry, Date closeTime) {
 		try {
+			Date endedAt = closeTime;
+			Date startedAt = queueEntry.getStartedAt();
+			if (startedAt != null && !endedAt.after(startedAt)) {
+				endedAt = new Date(startedAt.getTime() + 1000L);
+			}
 			queueEntry.setEndedAt(endedAt);
 			saveQueueEntry(queueEntry);
 			log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());

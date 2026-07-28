@@ -52,6 +52,8 @@ public class AutoCloseQueueEntryTaskTest {
 	
 	private RuntimeException saveFailure;
 	
+	private RuntimeException getQueueEntriesFailure;
+	
 	class TestAutoCloseQueueEntryTask extends AutoCloseQueueEntryTask {
 		
 		@Override
@@ -71,6 +73,9 @@ public class AutoCloseQueueEntryTaskTest {
 		
 		@Override
 		protected List<QueueEntry> getQueueEntries(QueueEntrySearchCriteria criteria) {
+			if (getQueueEntriesFailure != null) {
+				throw getQueueEntriesFailure;
+			}
 			// Emulate the DB-level filtering that getQueueEntries would normally perform
 			return queueEntries.stream()
 			        .filter(e -> criteria.getIsEnded() == null || criteria.getIsEnded().equals(e.getEndedAt() != null))
@@ -99,6 +104,7 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredQueues = null;
 		saveFailsFor = null;
 		saveFailure = null;
+		getQueueEntriesFailure = null;
 		now = getDate("2020-01-01 23:59");
 	}
 	
@@ -155,7 +161,27 @@ public class AutoCloseQueueEntryTaskTest {
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
 		new TestAutoCloseQueueEntryTask().run();
-		assertThat(queueEntry.getEndedAt(), equalTo(now));
+		assertThat(queueEntry.getEndedAt(), equalTo(getDate("2020-01-01 23:59")));
+	}
+	
+	@Test
+	public void shouldEndEntriesStartedAtTheCloseTimeOneSecondLater() throws Exception {
+		configuredTime = "18:00";
+		now = getDate("2020-01-01 18:30");
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 18:00", null);
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), equalTo(new Date(getDate("2020-01-01 18:00").getTime() + 1000L)));
+	}
+	
+	@Test
+	public void shouldNotPropagateWhenFetchingQueueEntriesFails() throws Exception {
+		configuredTime = "23:59";
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
+		getQueueEntriesFailure = new APIException("could not query queue entries");
+		
+		new TestAutoCloseQueueEntryTask().run();
+		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
 	@Test
