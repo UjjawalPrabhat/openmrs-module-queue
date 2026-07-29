@@ -135,22 +135,17 @@ public class QueueEntryServiceTest {
 	
 	@Test
 	public void saveQueueEntryShouldResolvePreviousEntryFromQueueComingFrom() {
-		Queue queueComingFrom = new Queue();
-		Patient patient = new Patient();
-		Visit visit = new Visit();
-		Date startedAt = DateUtils.truncate(new Date(), Calendar.SECOND);
-		
 		QueueEntry prevEntry = new QueueEntry();
 		prevEntry.setQueueEntryId(1);
 		
 		QueueEntry newEntry = new QueueEntry();
 		newEntry.setQueue(new Queue());
-		newEntry.setPatient(patient);
-		newEntry.setVisit(visit);
+		newEntry.setPatient(new Patient());
+		newEntry.setVisit(new Visit());
 		newEntry.setStatus(new Concept());
 		newEntry.setPriority(new Concept());
-		newEntry.setStartedAt(startedAt);
-		newEntry.setQueueComingFrom(queueComingFrom);
+		newEntry.setStartedAt(DateUtils.truncate(new Date(), Calendar.SECOND));
+		newEntry.setQueueComingFrom(new Queue());
 		
 		when(dao.getQueueEntries(any())).thenReturn(Collections.singletonList(prevEntry));
 		when(dao.createOrUpdate(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -181,6 +176,19 @@ public class QueueEntryServiceTest {
 		QueueEntry result = queueEntryService.saveQueueEntry(newEntry);
 		
 		assertNull(result.getPreviousQueueEntry());
+	}
+	
+	@Test
+	public void getPreviousQueueEntryShouldTreatAVoidedPredecessorAsAbsent() {
+		QueueEntry prevEntry = new QueueEntry();
+		prevEntry.setQueueEntryId(1);
+		prevEntry.setVoided(true);
+		
+		QueueEntry queueEntry = new QueueEntry();
+		queueEntry.setQueueEntryId(2);
+		queueEntry.setPreviousQueueEntry(prevEntry);
+		
+		assertNull(queueEntryService.getPreviousQueueEntry(queueEntry));
 	}
 	
 	@Test

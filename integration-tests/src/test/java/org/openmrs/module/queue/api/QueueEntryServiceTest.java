@@ -143,18 +143,6 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 	}
 	
 	@Test
-	public void transitionQueueEntryShouldSetPreviousQueueEntryOnTheNewEntry() {
-		QueueEntry queueEntry = queueEntryService.getQueueEntryById(3).get();
-		QueueEntryTransition transition = new QueueEntryTransition();
-		transition.setQueueEntryToTransition(queueEntry);
-		transition.setTransitionDate(new Date());
-		QueueEntry newEntry = queueEntryService.transitionQueueEntry(transition);
-		assertThat(newEntry.getPreviousQueueEntry(), is(notNullValue()));
-		assertThat(newEntry.getPreviousQueueEntry().getQueueEntryId(), is(queueEntry.getQueueEntryId()));
-		assertThat(queueEntryService.getPreviousQueueEntry(newEntry).getQueueEntryId(), is(queueEntry.getQueueEntryId()));
-	}
-	
-	@Test
 	public void undoTransitionShouldResolveThePreviousEntryViaTheColumn() {
 		// Undo must resolve the predecessor from the column, and must not leave the voided entry claiming one.
 		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
@@ -167,5 +155,33 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 		QueueEntry reopened = queueEntryService.undoTransition(newEntry);
 		assertThat(reopened.getQueueEntryId(), is(entry3.getQueueEntryId()));
 		assertThat(newEntry.getPreviousQueueEntry(), is(nullValue()));
+	}
+	
+	@Test
+	public void undoTransitionShouldNotActOnAVoidedPreviousQueueEntry() {
+		QueueEntry entry3 = queueEntryService.getQueueEntryById(3).get();
+		QueueEntryTransition transition = new QueueEntryTransition();
+		transition.setQueueEntryToTransition(entry3);
+		transition.setTransitionDate(new Date());
+		Integer newEntryId = queueEntryService.transitionQueueEntry(transition).getQueueEntryId();
+		queueEntryService.voidQueueEntry(entry3, "voided after the transition");
+		Context.flushSession();
+		Context.clearSession();
+		
+		// The column is still set; the voided predecessor is filtered out on read rather than cleared
+		QueueEntry reloaded = queueEntryService.getQueueEntryById(newEntryId).get();
+		assertThat(reloaded.getPreviousQueueEntry(), is(notNullValue()));
+		try {
+			queueEntryService.undoTransition(reloaded);
+			fail("Expected IllegalArgumentException to be thrown");
+		}
+		catch (IllegalArgumentException e) {
+			assertThat(e.getMessage(), containsString("does not have a previous queue entry"));
+		}
+		Context.clearSession();
+		
+		// The voided predecessor must stay ended, and the successor must stay active
+		assertThat(queueEntryService.getQueueEntryById(3).get().getEndedAt(), is(notNullValue()));
+		assertThat(queueEntryService.getQueueEntryById(newEntryId).get().getVoided(), is(false));
 	}
 }

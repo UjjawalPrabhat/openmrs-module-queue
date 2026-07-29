@@ -300,10 +300,13 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 	@Override
 	@Transactional(readOnly = true)
 	public QueueEntry getPreviousQueueEntry(@NotNull QueueEntry queueEntry) {
-		return queueEntry.getPreviousQueueEntry();
+		QueueEntry previousQueueEntry = queueEntry.getPreviousQueueEntry();
+		if (previousQueueEntry == null || previousQueueEntry.getVoided()) {
+			return null;
+		}
+		return previousQueueEntry;
 	}
 	
-	// Resolves the predecessor from queueComingFrom, returning null if there is no unambiguous match.
 	private QueueEntry resolvePreviousQueueEntry(QueueEntry queueEntry) {
 		Queue queueComingFrom = queueEntry.getQueueComingFrom();
 		if (queueComingFrom == null) {

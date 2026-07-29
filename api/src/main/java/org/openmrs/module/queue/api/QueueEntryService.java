@@ -68,8 +68,8 @@ public interface QueueEntryService {
 	 * time is the same as Q.startedAt time, and whose queue is Q.queueComingFrom
 	 *
 	 * @param queueEntry
-	 * @return the previous queue entry, null if there is none or if it could not be identified
-	 *         unambiguously when the queue entry was created.
+	 * @return the previous queue entry, null if there is none, if it could not be identified
+	 *         unambiguously when the queue entry was created, or if it has since been voided.
 	 */
 	@Authorized(PrivilegeConstants.GET_QUEUE_ENTRIES)
 	QueueEntry getPreviousQueueEntry(@NotNull QueueEntry queueEntry);
