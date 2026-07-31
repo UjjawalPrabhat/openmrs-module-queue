@@ -55,10 +55,9 @@ public class QueueUtils {
 	/**
 	 * @param queueEntries the QueueEntries to check
 	 * @return the average duration for the entries, in minutes, between startedAt and endedAt, where
-	 *         both are non-null
+	 *         both are non-null, or null if no entry has both a startedAt and an endedAt
 	 */
-	public static double computeAverageWaitTimeInMinutes(List<QueueEntry> queueEntries) {
-		double averageWaitTime = 0.0;
+	public static Double computeAverageWaitTimeInMinutes(List<QueueEntry> queueEntries) {
 		if (queueEntries != null && !queueEntries.isEmpty()) {
 			double totalWaitTime = 0.0;
 			int numEntries = 0;
@@ -70,9 +69,12 @@ public class QueueUtils {
 					numEntries++;
 				}
 			}
-			averageWaitTime = totalWaitTime / numEntries;
+			// Returning 0.0 here would be indistinguishable from a genuine zero-minute wait
+			if (numEntries > 0) {
+				return totalWaitTime / numEntries;
+			}
 		}
-		return averageWaitTime;
+		return null;
 	}
 	
 	/**
