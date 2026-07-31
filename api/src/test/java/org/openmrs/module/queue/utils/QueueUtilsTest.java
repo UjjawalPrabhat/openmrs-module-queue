@@ -63,11 +63,15 @@ public class QueueUtilsTest {
 		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, AUG_2), entry(AUG_1, AUG_3))),
 		    is(2160.0));
 		
-		// Entries that have not ended yet are not part of the average
+		// Entries missing a start or an end are not part of the average
 		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, AUG_2), entry(AUG_1, NULL))), is(1440.0));
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(NULL, AUG_2), entry(AUG_1, AUG_2))), is(1440.0));
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(NULL, NULL), entry(AUG_1, AUG_2))), is(1440.0));
 		
 		// Test that there is no average to report rather than dividing by zero and returning NaN
 		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(AUG_1, NULL), entry(AUG_2, NULL))),
+		    is(nullValue()));
+		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries(entry(NULL, NULL), entry(NULL, NULL))),
 		    is(nullValue()));
 		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(entries()), is(nullValue()));
 		assertThat(QueueUtils.computeAverageWaitTimeInMinutes(null), is(nullValue()));
