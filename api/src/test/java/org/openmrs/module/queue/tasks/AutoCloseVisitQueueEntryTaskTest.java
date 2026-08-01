@@ -59,17 +59,17 @@ public class AutoCloseVisitQueueEntryTaskTest {
 		queueEntries.add(queueEntry2);
 		
 		TestAutoCloseVisitEntryTask task = new TestAutoCloseVisitEntryTask();
-		task.run();
+		task.execute();
 		assertThat(queueEntry1.getEndedAt(), nullValue());
 		assertThat(queueEntry2.getEndedAt(), nullValue());
 		
 		visit1.setStopDatetime(getDate("2020-01-01 23:15"));
-		task.run();
+		task.execute();
 		assertThat(queueEntry1.getEndedAt(), equalTo(visit1.getStopDatetime()));
 		assertThat(queueEntry2.getEndedAt(), nullValue());
 		
 		visit2.setStopDatetime(getDate("2021-01-05 11:30"));
-		task.run();
+		task.execute();
 		assertThat(queueEntry1.getEndedAt(), equalTo(visit1.getStopDatetime()));
 		assertThat(queueEntry2.getEndedAt(), equalTo(visit2.getStopDatetime()));
 	}

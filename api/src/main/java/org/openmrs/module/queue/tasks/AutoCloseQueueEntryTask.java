@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -28,6 +27,7 @@ import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
 import org.openmrs.module.queue.model.Queue;
 import org.openmrs.module.queue.model.QueueEntry;
+import org.openmrs.scheduler.tasks.AbstractTask;
 
 /**
  * This ends all active queue entries in the configured queues once per day at a configured time of
@@ -37,19 +37,18 @@ import org.openmrs.module.queue.model.QueueEntry;
  * then are left in the queue and a run missed at the configured time is caught up by the next one.
  */
 @Slf4j
-public class AutoCloseQueueEntryTask implements Runnable {
+public class AutoCloseQueueEntryTask extends AbstractTask {
 	
 	private static final String TIME_FORMAT = "HH:mm";
 	
-	private static final AtomicBoolean currentlyExecuting = new AtomicBoolean(false);
-	
 	@Override
-	public void run() {
-		if (!currentlyExecuting.compareAndSet(false, true)) {
+	public void execute() {
+		if (isExecuting) {
 			log.debug("AutoCloseQueueEntryTask is still executing, not running again");
 			return;
 		}
 		log.debug("Executing AutoCloseQueueEntryTask");
+		startExecuting();
 		try {
 			String configuredTime = getConfiguredCloseTime();
 			if (StringUtils.isBlank(configuredTime)) {
@@ -84,7 +83,7 @@ public class AutoCloseQueueEntryTask implements Runnable {
 			log.error("AutoCloseQueueEntryTask failed to complete", e);
 		}
 		finally {
-			currentlyExecuting.set(false);
+			stopExecuting();
 		}
 	}
 	
@@ -144,15 +143,14 @@ public class AutoCloseQueueEntryTask implements Runnable {
 	 *         auto-clearing is disabled
 	 */
 	protected String getConfiguredCloseTime() {
-		return getServices().getAdministrationService().getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_AT_TIME);
+		return getServices().getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_AT_TIME);
 	}
 	
 	/**
 	 * @return the queues whose entries should be cleared, or null to clear entries in all queues
 	 */
 	protected List<Queue> getQueuesToClear() {
-		String configuredQueues = getServices().getAdministrationService()
-		        .getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES);
+		String configuredQueues = getServices().getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES);
 		if (StringUtils.isBlank(configuredQueues)) {
 			return null;
 		}

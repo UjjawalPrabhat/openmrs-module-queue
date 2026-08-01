@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 import org.junit.Before;
 import org.junit.Test;
 import org.openmrs.api.APIException;
-import org.openmrs.api.AdministrationService;
 import org.openmrs.api.ValidationException;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
@@ -113,7 +112,7 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredTime = "";
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -122,7 +121,7 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredTime = "nonsense";
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -131,7 +130,7 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredTime = "11:00 PM";
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -141,7 +140,7 @@ public class AutoCloseQueueEntryTaskTest {
 		now = getDate("2020-01-01 17:00");
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -150,7 +149,7 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredTime = "23:59";
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), equalTo(now));
 	}
 	
@@ -160,7 +159,7 @@ public class AutoCloseQueueEntryTaskTest {
 		now = getDate("2020-01-02 08:00");
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), equalTo(getDate("2020-01-01 23:59")));
 	}
 	
@@ -170,7 +169,7 @@ public class AutoCloseQueueEntryTaskTest {
 		now = getDate("2020-01-01 18:30");
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 18:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), equalTo(new Date(getDate("2020-01-01 18:00").getTime() + 1000L)));
 	}
 	
@@ -180,7 +179,7 @@ public class AutoCloseQueueEntryTaskTest {
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		getQueueEntriesFailure = new APIException("could not query queue entries");
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -190,7 +189,7 @@ public class AutoCloseQueueEntryTaskTest {
 		now = getDate("2020-01-02 08:00");
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-02 07:00", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), nullValue());
 	}
 	
@@ -201,7 +200,7 @@ public class AutoCloseQueueEntryTaskTest {
 		QueueEntry queueEntry = queueEntryStartedAt("2020-01-01 09:00", null);
 		queueEntry.setEndedAt(alreadyEndedAt);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), equalTo(alreadyEndedAt));
 	}
 	
@@ -212,7 +211,7 @@ public class AutoCloseQueueEntryTaskTest {
 		QueueEntry beforeCloseTime = queueEntryStartedAt("2020-01-01 09:00", null);
 		QueueEntry afterCloseTime = queueEntryStartedAt("2020-01-01 18:15", null);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(beforeCloseTime.getEndedAt(), notNullValue());
 		assertThat(afterCloseTime.getEndedAt(), nullValue());
 	}
@@ -228,7 +227,7 @@ public class AutoCloseQueueEntryTaskTest {
 		QueueEntry inQueueA = queueEntryStartedAt("2020-01-01 09:00", queueA);
 		QueueEntry inQueueB = queueEntryStartedAt("2020-01-01 09:00", queueB);
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(inQueueA.getEndedAt(), notNullValue());
 		assertThat(inQueueB.getEndedAt(), nullValue());
 	}
@@ -241,7 +240,7 @@ public class AutoCloseQueueEntryTaskTest {
 		saveFailsFor = rejected;
 		saveFailure = new ValidationException("endedAt is after the visit stop date");
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(evictedFromSession, contains(rejected));
 		assertThat(saved.getEndedAt(), equalTo(now));
 	}
@@ -254,7 +253,7 @@ public class AutoCloseQueueEntryTaskTest {
 		saveFailsFor = failed;
 		saveFailure = new APIException("could not save");
 		
-		new TestAutoCloseQueueEntryTask().run();
+		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(evictedFromSession, contains(failed));
 		assertThat(saved.getEndedAt(), equalTo(now));
 	}
@@ -299,9 +298,7 @@ public class AutoCloseQueueEntryTaskTest {
 	 */
 	private AutoCloseQueueEntryTask taskForConfiguredQueues(String configuredQueueUuids) {
 		QueueServicesWrapper services = mock(QueueServicesWrapper.class);
-		AdministrationService administrationService = mock(AdministrationService.class);
-		when(services.getAdministrationService()).thenReturn(administrationService);
-		when(administrationService.getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES)).thenReturn(configuredQueueUuids);
+		when(services.getGlobalProperty(AUTO_CLOSE_QUEUE_ENTRIES_FOR_QUEUES)).thenReturn(configuredQueueUuids);
 		return new AutoCloseQueueEntryTask() {
 			
 			@Override

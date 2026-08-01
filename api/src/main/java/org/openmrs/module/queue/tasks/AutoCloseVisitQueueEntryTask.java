@@ -19,6 +19,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.queue.api.QueueEntryService;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
 import org.openmrs.module.queue.model.QueueEntry;
+import org.openmrs.scheduler.tasks.AbstractTask;
 
 /**
  * This iterates over all active VisitQueueEntries If the Visit associated with any of these has
@@ -26,19 +27,17 @@ import org.openmrs.module.queue.model.QueueEntry;
  * datetime as the Visit was stopped.
  */
 @Slf4j
-public class AutoCloseVisitQueueEntryTask implements Runnable {
-	
-	private static volatile boolean currentlyExecuting = false;
+public class AutoCloseVisitQueueEntryTask extends AbstractTask {
 	
 	@Override
-	public void run() {
-		if (currentlyExecuting) {
+	public void execute() {
+		if (isExecuting) {
 			log.debug("AutoCloseVisitQueueEntryTask is still executing, not running again");
 			return;
 		}
 		log.debug("Executing AutoCloseVisitQueueEntryTask");
+		startExecuting();
 		try {
-			currentlyExecuting = true;
 			List<QueueEntry> queueEntries = getActiveVisitQueueEntries();
 			log.debug("There are {} active visit queue entries", queueEntries.size());
 			for (QueueEntry queueEntry : queueEntries) {
@@ -62,7 +61,7 @@ public class AutoCloseVisitQueueEntryTask implements Runnable {
 			}
 		}
 		finally {
-			currentlyExecuting = false;
+			stopExecuting();
 		}
 	}
 	
