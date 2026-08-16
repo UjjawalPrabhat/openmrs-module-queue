@@ -434,6 +434,15 @@ public class QueueEntryResourceTest extends BaseQueueResourceTest<QueueEntry, Qu
 	}
 	
 	@Test
+	public void shouldReturnPatientToStringForDisplayWhenPatientHasNoUnvoidedName() {
+		Patient patient = new Patient();
+		patient.setPatientId(7);
+		queueEntry.setPatient(patient);
+		
+		assertThat(resource.getDisplay(queueEntry), is("Patient#7"));
+	}
+	
+	@Test
 	public void shouldInstantiateNewDelegate() {
 		assertThat(getResource().newDelegate(), notNullValue());
 	}
