@@ -10,6 +10,7 @@
 package org.openmrs.module.queue.web.resources.parser;
 
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +20,7 @@ import org.openmrs.Location;
 import org.openmrs.Provider;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
-import org.openmrs.module.queue.utils.QueueUtils;
+import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -153,32 +154,32 @@ public class QueueEntrySearchCriteriaParser {
 				}
 				case SEARCH_PARAM_STARTED_ON_OR_AFTER: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON_OR_AFTER)[0];
-					criteria.setStartedOnOrAfter(QueueUtils.parseDate(date));
+					criteria.setStartedOnOrAfter(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_STARTED_ON_OR_BEFORE: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON_OR_BEFORE)[0];
-					criteria.setStartedOnOrBefore(QueueUtils.parseDate(date));
+					criteria.setStartedOnOrBefore(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_STARTED_ON: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON)[0];
-					criteria.setStartedOn(QueueUtils.parseDate(date));
+					criteria.setStartedOn(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON_OR_AFTER: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON_OR_AFTER)[0];
-					criteria.setEndedOnOrAfter(QueueUtils.parseDate(date));
+					criteria.setEndedOnOrAfter(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON_OR_BEFORE: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON_OR_BEFORE)[0];
-					criteria.setEndedOnOrBefore(QueueUtils.parseDate(date));
+					criteria.setEndedOnOrBefore(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON)[0];
-					criteria.setEndedOn(QueueUtils.parseDate(date));
+					criteria.setEndedOn(parseDate(date));
 					break;
 				}
 				case SEARCH_PARAM_IS_ENDED: {
@@ -195,6 +196,13 @@ public class QueueEntrySearchCriteriaParser {
 			}
 		}
 		return criteria;
+	}
+	
+	private Date parseDate(String value) {
+		if (StringUtils.isBlank(value)) {
+			return null;
+		}
+		return (Date) ConversionUtil.convert(value, Date.class);
 	}
 	
 	private Boolean parseBoolean(String value) {
