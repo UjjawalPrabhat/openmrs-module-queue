@@ -53,9 +53,11 @@ public class AutoCloseVisitQueueEntryTask extends AbstractTask {
 					}
 				}
 				catch (ValidationException ve) {
+					evictFromSession(queueEntry);
 					log.warn("Unable to auto-close queue entry {}: {}", queueEntry.getQueueEntryId(), ve.getMessage());
 				}
 				catch (Exception e) {
+					evictFromSession(queueEntry);
 					log.warn("Unable to auto-close queue entry {}", queueEntry.getQueueEntryId(), e);
 				}
 			}
@@ -80,5 +82,12 @@ public class AutoCloseVisitQueueEntryTask extends AbstractTask {
 	 */
 	protected void saveQueueEntry(QueueEntry queueEntry) {
 		Context.getService(QueueEntryService.class).saveQueueEntry(queueEntry);
+	}
+	
+	/**
+	 * @param queueEntry the QueueEntry to evict from the current Hibernate session
+	 */
+	protected void evictFromSession(QueueEntry queueEntry) {
+		Context.evictFromSession(queueEntry);
 	}
 }
