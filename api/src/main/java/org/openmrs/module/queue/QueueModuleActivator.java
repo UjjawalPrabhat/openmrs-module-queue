@@ -51,19 +51,19 @@ public class QueueModuleActivator extends BaseModuleActivator {
 	 * running server.
 	 */
 	private void registerTask(Class<? extends Task> taskClass, String name, String description) {
-		SchedulerService schedulerService = Context.getSchedulerService();
-		if (schedulerService.getTaskByName(name) != null) {
-			log.debug("Scheduled task {} is registered already", name);
-			return;
-		}
-		TaskDefinition taskDefinition = new TaskDefinition();
-		taskDefinition.setName(name);
-		taskDefinition.setDescription(description);
-		taskDefinition.setTaskClass(taskClass.getName());
-		taskDefinition.setStartTime(new Date());
-		taskDefinition.setRepeatInterval(REPEAT_INTERVAL_SECONDS);
-		taskDefinition.setStartOnStartup(true);
 		try {
+			SchedulerService schedulerService = Context.getSchedulerService();
+			if (schedulerService.getTaskByName(name) != null) {
+				log.debug("Scheduled task {} is registered already", name);
+				return;
+			}
+			TaskDefinition taskDefinition = new TaskDefinition();
+			taskDefinition.setName(name);
+			taskDefinition.setDescription(description);
+			taskDefinition.setTaskClass(taskClass.getName());
+			taskDefinition.setStartTime(new Date());
+			taskDefinition.setRepeatInterval(REPEAT_INTERVAL_SECONDS);
+			taskDefinition.setStartOnStartup(true);
 			schedulerService.saveTaskDefinition(taskDefinition);
 			schedulerService.scheduleIfNotRunning(taskDefinition);
 			log.info("Registered scheduled task {}", name);

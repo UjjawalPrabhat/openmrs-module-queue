@@ -147,10 +147,18 @@ public interface QueueEntryService {
 	        @NotNull VisitAttributeType visitAttributeType);
 	
 	/**
-	 * Closes all active queue entries
+	 * Ends the given queue entry at the given time. The entry is reloaded before it is written, so a
+	 * queue entry that has been ended or otherwise modified since it was loaded is left alone rather
+	 * than having the stale state written back over it. This is intended for the scheduled tasks, which
+	 * work from a list of entries loaded before the first of them is saved.
+	 *
+	 * @param queueEntry the queue entry to end
+	 * @param endedAt the time at which to end it
+	 * @return true if the queue entry was ended, false if it had already ended or was modified by
+	 *         another transaction
 	 */
-	@Authorized(PrivilegeConstants.MANAGE_QUEUE_ENTRIES)
-	void closeActiveQueueEntries();
+	@Authorized({ PrivilegeConstants.MANAGE_QUEUE_ENTRIES })
+	boolean closeQueueEntry(@NotNull QueueEntry queueEntry, @NotNull Date endedAt);
 	
 	/**
 	 * @return the instance of SortWeightGenerator that is configured via global property, or null if

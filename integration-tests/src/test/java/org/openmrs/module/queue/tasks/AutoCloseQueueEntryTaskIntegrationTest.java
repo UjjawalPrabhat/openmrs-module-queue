@@ -43,7 +43,7 @@ import org.springframework.test.context.ContextConfiguration;
 /**
  * Runs the task the way the scheduler does and checks the entry it ends reaches the database. The
  * unit tests stub the services the task talks through, so this is what covers the search criteria
- * filtering as they assume and the save surviving validation.
+ * filtering as they assume and the write reaching the row.
  */
 @ContextConfiguration(classes = SpringTestConfiguration.class, inheritLocations = false)
 public class AutoCloseQueueEntryTaskIntegrationTest extends BaseModuleContextSensitiveTest {

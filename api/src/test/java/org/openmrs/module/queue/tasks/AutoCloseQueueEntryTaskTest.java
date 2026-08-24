@@ -51,7 +51,11 @@ public class AutoCloseQueueEntryTaskTest {
 	
 	private RuntimeException saveFailure;
 	
+	private QueueEntry modifiedSinceLoading;
+	
 	private RuntimeException getQueueEntriesFailure;
+	
+	private int sessionFlushes;
 	
 	class TestAutoCloseQueueEntryTask extends AutoCloseQueueEntryTask {
 		
@@ -83,16 +87,31 @@ public class AutoCloseQueueEntryTaskTest {
 			        .collect(Collectors.toList());
 		}
 		
+		/**
+		 * Emulates
+		 * {@link org.openmrs.module.queue.api.QueueEntryService#closeQueueEntry(QueueEntry, Date)}, which
+		 * ends the entry unless it has been modified since it was loaded
+		 */
 		@Override
-		protected void saveQueueEntry(QueueEntry queueEntry) {
+		protected boolean endQueueEntry(QueueEntry queueEntry, Date endedAt) {
 			if (queueEntry == saveFailsFor) {
 				throw saveFailure;
 			}
+			if (queueEntry == modifiedSinceLoading) {
+				return false;
+			}
+			queueEntry.setEndedAt(endedAt);
+			return true;
 		}
 		
 		@Override
 		protected void evictFromSession(QueueEntry queueEntry) {
 			evictedFromSession.add(queueEntry);
+		}
+		
+		@Override
+		protected void flushAndClearSession() {
+			sessionFlushes++;
 		}
 	}
 	
@@ -103,7 +122,9 @@ public class AutoCloseQueueEntryTaskTest {
 		configuredQueues = null;
 		saveFailsFor = null;
 		saveFailure = null;
+		modifiedSinceLoading = null;
 		getQueueEntriesFailure = null;
+		sessionFlushes = 0;
 		now = getDate("2020-01-01 23:59");
 	}
 	
@@ -171,6 +192,50 @@ public class AutoCloseQueueEntryTaskTest {
 		
 		new TestAutoCloseQueueEntryTask().execute();
 		assertThat(queueEntry.getEndedAt(), equalTo(new Date(getDate("2020-01-01 18:00").getTime() + 1000L)));
+	}
+	
+	@Test
+	public void shouldClearEntriesOnALaterRunOfTheSameTaskInstance() throws Exception {
+		configuredTime = "23:59";
+		TestAutoCloseQueueEntryTask task = new TestAutoCloseQueueEntryTask();
+		task.execute();
+		
+		QueueEntry queueEntry = queueEntryStartedAt("2020-01-02 09:00", null);
+		now = getDate("2020-01-02 23:59");
+		task.execute();
+		assertThat(queueEntry.getEndedAt(), equalTo(now));
+	}
+	
+	@Test
+	public void shouldLeaveEntriesModifiedSinceTheyWereLoadedAlone() throws Exception {
+		configuredTime = "23:59";
+		QueueEntry transitionedInTheMeantime = queueEntryStartedAt("2020-01-01 09:00", null);
+		QueueEntry stillActive = queueEntryStartedAt("2020-01-01 10:00", null);
+		modifiedSinceLoading = transitionedInTheMeantime;
+		
+		new TestAutoCloseQueueEntryTask().execute();
+		assertThat(transitionedInTheMeantime.getEndedAt(), nullValue());
+		assertThat(stillActive.getEndedAt(), equalTo(now));
+	}
+	
+	@Test
+	public void shouldFlushTheSessionPeriodicallyWhileClearingALargeNumberOfEntries() throws Exception {
+		configuredTime = "23:59";
+		for (int i = 0; i < 501; i++) {
+			queueEntryStartedAt("2020-01-01 09:00", null);
+		}
+		
+		new TestAutoCloseQueueEntryTask().execute();
+		assertThat(sessionFlushes, equalTo(2));
+	}
+	
+	@Test
+	public void shouldNotFlushTheSessionWhenClearingAHandfulOfEntries() throws Exception {
+		configuredTime = "23:59";
+		queueEntryStartedAt("2020-01-01 09:00", null);
+		
+		new TestAutoCloseQueueEntryTask().execute();
+		assertThat(sessionFlushes, equalTo(0));
 	}
 	
 	@Test

@@ -41,6 +41,13 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 	
 	private static final String TIME_FORMAT = "HH:mm";
 	
+	/**
+	 * The first run after an implementer configures a close time can find a very large number of
+	 * never-ended entries, so the session is flushed and cleared periodically to keep it from growing
+	 * over the whole sweep, which would make every save dirty-check every entry loaded before it.
+	 */
+	private static final int FLUSH_BATCH_SIZE = 250;
+	
 	@Override
 	public void execute() {
 		if (isExecuting) {
@@ -64,7 +71,7 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 			
 			List<Queue> queues = getQueuesToClear();
 			if (queues != null && queues.isEmpty()) {
-				log.debug("No queues configured for auto-close, nothing to do");
+				log.debug("None of the queues configured for auto-close could be resolved, nothing to do");
 				return;
 			}
 			
@@ -75,8 +82,12 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 			
 			List<QueueEntry> queueEntries = getQueueEntries(criteria);
 			log.debug("There are {} queue entries to auto-close", queueEntries.size());
+			int processed = 0;
 			for (QueueEntry queueEntry : queueEntries) {
 				closeQueueEntry(queueEntry, closeTime);
+				if (++processed % FLUSH_BATCH_SIZE == 0) {
+					flushAndClearSession();
+				}
 			}
 		}
 		catch (Exception e) {
@@ -92,11 +103,16 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 			Date endedAt = closeTime;
 			Date startedAt = queueEntry.getStartedAt();
 			if (startedAt != null && !endedAt.after(startedAt)) {
+				// startedOnOrBefore is inclusive, so an entry started exactly at the close time is swept
+				// too, and QueueEntryValidator requires endedAt to be strictly after startedAt
 				endedAt = new Date(startedAt.getTime() + 1000L);
 			}
-			queueEntry.setEndedAt(endedAt);
-			saveQueueEntry(queueEntry);
-			log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
+			if (endQueueEntry(queueEntry, endedAt)) {
+				log.info("Queue entry auto-closed on schedule: {}", queueEntry.getQueueEntryId());
+			} else {
+				log.debug("Queue entry {} was ended or modified since it was loaded, leaving it alone",
+				    queueEntry.getQueueEntryId());
+			}
 		}
 		catch (ValidationException ve) {
 			evictFromSession(queueEntry);
@@ -180,10 +196,13 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 	}
 	
 	/**
-	 * @param queueEntry the QueueEntry to save
+	 * @param queueEntry the QueueEntry to end
+	 * @param endedAt the time at which to end it
+	 * @return true if the queue entry was ended, false if it was ended or otherwise modified since it
+	 *         was loaded
 	 */
-	protected void saveQueueEntry(QueueEntry queueEntry) {
-		getServices().getQueueEntryService().saveQueueEntry(queueEntry);
+	protected boolean endQueueEntry(QueueEntry queueEntry, Date endedAt) {
+		return getServices().getQueueEntryService().closeQueueEntry(queueEntry, endedAt);
 	}
 	
 	/**
@@ -191,6 +210,14 @@ public class AutoCloseQueueEntryTask extends AbstractTask {
 	 */
 	protected void evictFromSession(QueueEntry queueEntry) {
 		Context.evictFromSession(queueEntry);
+	}
+	
+	/**
+	 * Flushes and clears the Hibernate session of the thread running this task
+	 */
+	protected void flushAndClearSession() {
+		Context.flushSession();
+		Context.clearSession();
 	}
 	
 	/**

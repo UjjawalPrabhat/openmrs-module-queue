@@ -250,12 +250,31 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 		return queueNumber;
 	}
 	
+	/**
+	 * @see QueueEntryService#closeQueueEntry(QueueEntry, Date)
+	 */
 	@Override
-	public void closeActiveQueueEntries() {
-		QueueEntrySearchCriteria criteria = new QueueEntrySearchCriteria();
-		criteria.setIsEnded(Boolean.FALSE);
-		List<QueueEntry> queueEntries = getQueueEntries(criteria);
-		queueEntries.forEach(this::endQueueEntry);
+	public boolean closeQueueEntry(@NotNull QueueEntry queueEntry, @NotNull Date endedAt) {
+		if (queueEntry.getId() == null) {
+			throw new IllegalArgumentException("Cannot close a queue entry that has not been saved");
+		}
+		
+		// Reload from database to check current state and guard against concurrent modifications
+		QueueEntry currentState = dao.get(queueEntry.getId()).orElse(null);
+		if (currentState == null) {
+			log.debug("Queue entry {} no longer exists, not closing it", queueEntry.getId());
+			return false;
+		}
+		if (currentState.getVoided() || currentState.getEndedAt() != null) {
+			log.debug("Queue entry {} is already voided or ended, not closing it", queueEntry.getId());
+			return false;
+		}
+		
+		// Capture the dateChanged for optimistic locking
+		Date expectedDateChanged = currentState.getDateChanged();
+		
+		currentState.setEndedAt(endedAt);
+		return dao.updateIfUnmodified(currentState, expectedDateChanged);
 	}
 	
 	@Override
@@ -277,11 +296,6 @@ public class QueueEntryServiceImpl extends BaseOpenmrsService implements QueueEn
 	 */
 	protected QueueEntryService getProxiedQueueEntryService() {
 		return Context.getService(QueueEntryService.class);
-	}
-	
-	private void endQueueEntry(@NotNull QueueEntry queueEntry) {
-		queueEntry.setEndedAt(new Date());
-		dao.createOrUpdate(queueEntry);
 	}
 	
 	private static Date roundToSecond(Date date) {

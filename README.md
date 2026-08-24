@@ -87,7 +87,8 @@ queue of patients to follow up with over the coming week. Use `queue.autoCloseQu
 clearing for some queues but not others.
 
 The task is registered with the scheduler as `Queue Module - Auto Close Queue Entries` and appears on the Manage
-Scheduler page, where its interval can be changed or the task stopped altogether.
+Scheduler page, where its interval can be changed or the task stopped until the next restart. Blanking this
+property is what turns the clear off for good.
 
 The task works from the most recent occurrence of the configured time rather than from the moment it happens to run,
 so if it does not get a chance to run at that time (a restart or a maintenance window, say) the next run catches up

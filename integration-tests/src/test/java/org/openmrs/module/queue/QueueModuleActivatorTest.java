@@ -45,6 +45,8 @@ public class QueueModuleActivatorTest extends BaseModuleContextSensitiveTest {
 		assertThat(taskDefinition(AUTO_CLOSE_QUEUE_ENTRY_TASK).getTaskClass(),
 		    equalTo(AutoCloseQueueEntryTask.class.getName()));
 		assertThat(taskDefinition(AUTO_CLOSE_QUEUE_ENTRY_TASK).getStarted(), equalTo(true));
+		assertThat(taskDefinition(AUTO_CLOSE_QUEUE_ENTRY_TASK).getRepeatInterval(), equalTo(60L));
+		assertThat(taskDefinition(AUTO_CLOSE_QUEUE_ENTRY_TASK).getStartOnStartup(), equalTo(true));
 	}
 	
 	@Test

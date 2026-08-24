@@ -47,9 +47,12 @@ public class AutoCloseVisitQueueEntryTask extends AbstractTask {
 					if (visitStopDatetime != null) {
 						log.debug("Visit {} is closed at {}", visit.getVisitId(), visitStopDatetime);
 						log.debug("Auto closing queue entry {}", queueEntry.getQueueEntryId());
-						queueEntry.setEndedAt(visitStopDatetime);
-						saveQueueEntry(queueEntry);
-						log.info("Queue entry auto-closed following close of visit: {}", queueEntry.getQueueEntryId());
+						if (endQueueEntry(queueEntry, visitStopDatetime)) {
+							log.info("Queue entry auto-closed following close of visit: {}", queueEntry.getQueueEntryId());
+						} else {
+							log.debug("Queue entry {} was ended or modified since it was loaded, leaving it alone",
+							    queueEntry.getQueueEntryId());
+						}
 					}
 				}
 				catch (ValidationException ve) {
@@ -78,10 +81,13 @@ public class AutoCloseVisitQueueEntryTask extends AbstractTask {
 	}
 	
 	/**
-	 * @param queueEntry the QueueEntry to save
+	 * @param queueEntry the QueueEntry to end
+	 * @param endedAt the time at which to end it
+	 * @return true if the queue entry was ended, false if it was ended or otherwise modified since it
+	 *         was loaded
 	 */
-	protected void saveQueueEntry(QueueEntry queueEntry) {
-		Context.getService(QueueEntryService.class).saveQueueEntry(queueEntry);
+	protected boolean endQueueEntry(QueueEntry queueEntry, Date endedAt) {
+		return Context.getService(QueueEntryService.class).closeQueueEntry(queueEntry, endedAt);
 	}
 	
 	/**

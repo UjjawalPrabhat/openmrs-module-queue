@@ -38,6 +38,8 @@ public class AutoCloseVisitQueueEntryTaskTest {
 	
 	private RuntimeException saveFailure;
 	
+	private QueueEntry modifiedSinceLoading;
+	
 	class TestAutoCloseVisitEntryTask extends AutoCloseVisitQueueEntryTask {
 		
 		@Override
@@ -45,11 +47,21 @@ public class AutoCloseVisitQueueEntryTaskTest {
 			return queueEntries.stream().filter(e -> e.getEndedAt() == null).collect(Collectors.toList());
 		}
 		
+		/**
+		 * Emulates
+		 * {@link org.openmrs.module.queue.api.QueueEntryService#closeQueueEntry(QueueEntry, Date)}, which
+		 * ends the entry unless it has been modified since it was loaded
+		 */
 		@Override
-		protected void saveQueueEntry(QueueEntry queueEntry) {
+		protected boolean endQueueEntry(QueueEntry queueEntry, Date endedAt) {
 			if (queueEntry == saveFailsFor) {
 				throw saveFailure;
 			}
+			if (queueEntry == modifiedSinceLoading) {
+				return false;
+			}
+			queueEntry.setEndedAt(endedAt);
+			return true;
 		}
 		
 		@Override
@@ -64,6 +76,18 @@ public class AutoCloseVisitQueueEntryTaskTest {
 		evictedFromSession.clear();
 		saveFailsFor = null;
 		saveFailure = null;
+		modifiedSinceLoading = null;
+	}
+	
+	@Test
+	public void shouldLeaveEntriesModifiedSinceTheyWereLoadedAlone() throws Exception {
+		QueueEntry transitionedInTheMeantime = closedVisitQueueEntry("2020-01-01 10:00", "2020-01-01 23:15");
+		QueueEntry stillActive = closedVisitQueueEntry("2020-01-01 10:00", "2020-01-01 23:15");
+		modifiedSinceLoading = transitionedInTheMeantime;
+		
+		new TestAutoCloseVisitEntryTask().execute();
+		assertThat(transitionedInTheMeantime.getEndedAt(), nullValue());
+		assertThat(stillActive.getEndedAt(), equalTo(stillActive.getVisit().getStopDatetime()));
 	}
 	
 	@Test
