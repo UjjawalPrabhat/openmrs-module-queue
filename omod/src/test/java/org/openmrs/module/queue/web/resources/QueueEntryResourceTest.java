@@ -11,6 +11,7 @@ package org.openmrs.module.queue.web.resources;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -22,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_ENDED_ON;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_ENDED_ON_OR_AFTER;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_ENDED_ON_OR_BEFORE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_HAS_VISIT;
@@ -35,6 +37,7 @@ import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCrit
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_QUEUE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_QUEUE_COMING_FROM;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_SERVICE;
+import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STARTED_ON;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STARTED_ON_OR_AFTER;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STARTED_ON_OR_BEFORE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STATUS;
@@ -388,6 +391,15 @@ public class QueueEntryResourceTest extends BaseQueueResourceTest<QueueEntry, Qu
 	}
 	
 	@Test
+	public void shouldSearchQueueEntriesByStartedOn() {
+		parameterMap.put(SEARCH_PARAM_STARTED_ON, new String[] { DATE_WITH_OFFSET });
+		resource.doSearch(requestContext);
+		verify(queueEntryService).getQueueEntries(queueEntryArgumentCaptor.capture());
+		QueueEntrySearchCriteria criteria = queueEntryArgumentCaptor.getValue();
+		assertThat(criteria.getStartedOn(), equalTo(EXPECTED_DATE));
+	}
+	
+	@Test
 	public void shouldSearchQueueEntriesByEndedOnOrAfter() {
 		parameterMap.put(SEARCH_PARAM_ENDED_ON_OR_AFTER, new String[] { DATE_WITH_OFFSET });
 		resource.doSearch(requestContext);
@@ -403,6 +415,15 @@ public class QueueEntryResourceTest extends BaseQueueResourceTest<QueueEntry, Qu
 		verify(queueEntryService).getQueueEntries(queueEntryArgumentCaptor.capture());
 		QueueEntrySearchCriteria criteria = queueEntryArgumentCaptor.getValue();
 		assertThat(criteria.getEndedOnOrBefore(), equalTo(EXPECTED_DATE));
+	}
+	
+	@Test
+	public void shouldSearchQueueEntriesByEndedOn() {
+		parameterMap.put(SEARCH_PARAM_ENDED_ON, new String[] { DATE_WITH_OFFSET });
+		resource.doSearch(requestContext);
+		verify(queueEntryService).getQueueEntries(queueEntryArgumentCaptor.capture());
+		QueueEntrySearchCriteria criteria = queueEntryArgumentCaptor.getValue();
+		assertThat(criteria.getEndedOn(), equalTo(EXPECTED_DATE));
 	}
 	
 	@Test
@@ -428,7 +449,15 @@ public class QueueEntryResourceTest extends BaseQueueResourceTest<QueueEntry, Qu
 	@Test
 	public void shouldFailToSearchQueueEntriesByAnUnparseableDate() {
 		parameterMap.put(SEARCH_PARAM_STARTED_ON_OR_AFTER, new String[] { "not-a-date" });
-		assertThrows(ConversionException.class, () -> resource.doSearch(requestContext));
+		ConversionException e = assertThrows(ConversionException.class, () -> resource.doSearch(requestContext));
+		assertThat(e.getMessage(), containsString(SEARCH_PARAM_STARTED_ON_OR_AFTER));
+	}
+	
+	@Test
+	public void shouldFailToSearchQueueEntriesByABlankDate() {
+		parameterMap.put(SEARCH_PARAM_STARTED_ON_OR_AFTER, new String[] { "" });
+		ConversionException e = assertThrows(ConversionException.class, () -> resource.doSearch(requestContext));
+		assertThat(e.getMessage(), containsString(SEARCH_PARAM_STARTED_ON_OR_AFTER));
 	}
 	
 	@Test

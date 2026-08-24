@@ -21,6 +21,7 @@ import org.openmrs.Provider;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
+import org.openmrs.module.webservices.rest.web.response.ConversionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -154,32 +155,32 @@ public class QueueEntrySearchCriteriaParser {
 				}
 				case SEARCH_PARAM_STARTED_ON_OR_AFTER: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON_OR_AFTER)[0];
-					criteria.setStartedOnOrAfter(parseDate(date));
+					criteria.setStartedOnOrAfter(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_STARTED_ON_OR_BEFORE: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON_OR_BEFORE)[0];
-					criteria.setStartedOnOrBefore(parseDate(date));
+					criteria.setStartedOnOrBefore(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_STARTED_ON: {
 					String date = parameterMap.get(SEARCH_PARAM_STARTED_ON)[0];
-					criteria.setStartedOn(parseDate(date));
+					criteria.setStartedOn(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON_OR_AFTER: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON_OR_AFTER)[0];
-					criteria.setEndedOnOrAfter(parseDate(date));
+					criteria.setEndedOnOrAfter(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON_OR_BEFORE: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON_OR_BEFORE)[0];
-					criteria.setEndedOnOrBefore(parseDate(date));
+					criteria.setEndedOnOrBefore(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_ENDED_ON: {
 					String date = parameterMap.get(SEARCH_PARAM_ENDED_ON)[0];
-					criteria.setEndedOn(parseDate(date));
+					criteria.setEndedOn(parseDate(parameterName, date));
 					break;
 				}
 				case SEARCH_PARAM_IS_ENDED: {
@@ -198,11 +199,16 @@ public class QueueEntrySearchCriteriaParser {
 		return criteria;
 	}
 	
-	private Date parseDate(String value) {
+	private Date parseDate(String parameterName, String value) {
 		if (StringUtils.isBlank(value)) {
-			return null;
+			throw new ConversionException("The " + parameterName + " parameter is blank");
 		}
-		return (Date) ConversionUtil.convert(value, Date.class);
+		try {
+			return (Date) ConversionUtil.convert(value, Date.class);
+		}
+		catch (ConversionException e) {
+			throw new ConversionException("Unable to parse the " + parameterName + " parameter: " + value, e);
+		}
 	}
 	
 	private Boolean parseBoolean(String value) {
