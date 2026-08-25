@@ -22,7 +22,6 @@ import javax.persistence.Table;
 
 import java.util.Date;
 
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -34,7 +33,6 @@ import org.openmrs.Patient;
 import org.openmrs.Provider;
 import org.openmrs.Visit;
 
-@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Setter
 @Getter
@@ -51,25 +49,21 @@ public class QueueEntry extends BaseChangeableOpenmrsData {
 	private Integer queueEntryId;
 	
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "queue_id", nullable = false)
 	private Queue queue;
 	
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "patient_id", nullable = false)
 	private Patient patient;
 	
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "visit_id")
 	private Visit visit;
 	
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "priority", referencedColumnName = "concept_id", nullable = false)
 	private Concept priority;
@@ -78,7 +72,6 @@ public class QueueEntry extends BaseChangeableOpenmrsData {
 	private String priorityComment;
 	
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "status", referencedColumnName = "concept_id", nullable = false)
 	private Concept status;
@@ -89,21 +82,18 @@ public class QueueEntry extends BaseChangeableOpenmrsData {
 	
 	//The Location the patient is waiting for, if any.
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "location_waiting_for", referencedColumnName = "location_id")
 	private Location locationWaitingFor;
 	
 	//The Provider the patient is waiting for, if any.
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "provider_waiting_for", referencedColumnName = "provider_id")
 	private Provider providerWaitingFor;
 	
 	//The queue the patient is coming from, if any.
 	@ToString.Exclude
-	@EqualsAndHashCode.Exclude
 	@OneToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "queue_coming_from", referencedColumnName = "queue_id")
 	private Queue queueComingFrom;

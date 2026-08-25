@@ -19,14 +19,12 @@ import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
 import javax.persistence.Table;
 
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.openmrs.BaseOpenmrsData;
 import org.openmrs.Provider;
 
-@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @Setter
 @Getter
@@ -41,12 +39,10 @@ public class RoomProviderMap extends BaseOpenmrsData {
 	@Column(name = "room_provider_map_id")
 	private Integer roomProviderMapId;
 	
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "queue_room_id", nullable = false)
 	private QueueRoom queueRoom;
 	
-	@EqualsAndHashCode.Exclude
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "provider_id", nullable = false)
 	private Provider provider;
