@@ -11,6 +11,7 @@ package org.openmrs.module.queue.model;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
@@ -40,11 +41,13 @@ public class RoomProviderMap extends BaseOpenmrsData {
 	@Column(name = "room_provider_map_id")
 	private Integer roomProviderMapId;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "queue_room_id", nullable = false)
 	private QueueRoom queueRoom;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "provider_id", nullable = false)
 	private Provider provider;
 	

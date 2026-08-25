@@ -11,6 +11,7 @@ package org.openmrs.module.queue.model;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
@@ -39,7 +40,8 @@ public class QueueRoom extends BaseChangeableOpenmrsMetadata {
 	@Column(name = "queue_room_id")
 	private Integer queueRoom;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "queue_id", nullable = false)
 	private Queue queue;
 	

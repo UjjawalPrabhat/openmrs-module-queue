@@ -49,19 +49,23 @@ public class Queue extends BaseChangeableOpenmrsMetadata {
 	@Column(name = "queue_id")
 	private Integer queueId;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "location_id", nullable = false)
 	private Location location;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "service", referencedColumnName = "concept_id", nullable = false)
 	private Concept service;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "priority_concept_set", referencedColumnName = "concept_id")
 	private Concept priorityConceptSet;
 	
-	@ManyToOne
+	@EqualsAndHashCode.Exclude
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "status_concept_set", referencedColumnName = "concept_id")
 	private Concept statusConceptSet;
 	
