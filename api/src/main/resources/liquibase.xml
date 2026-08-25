@@ -789,7 +789,7 @@
     <changeSet id="add_queue_entry_patient_id_index_20260605" author="ujjawalprabhat">
         <preConditions onFail="MARK_RAN" onError="WARN">
             <not>
-                <indexExists tableName="queue_entry" indexName="queue_entry_patient_id_idx"/>
+                <indexExists tableName="queue_entry" columnNames="patient_id"/>
             </not>
         </preConditions>
         <comment>Add index to queue_entry on patient_id</comment>
