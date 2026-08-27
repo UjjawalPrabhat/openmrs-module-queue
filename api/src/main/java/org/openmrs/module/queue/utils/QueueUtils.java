@@ -26,12 +26,14 @@ import org.openmrs.module.queue.model.QueueEntry;
 public class QueueUtils {
 	
 	/**
-	 * Utility method for parsing a date from a string into a Date. TODO: This will need review and
-	 * testing related to handling of timezones and other date formats
+	 * Utility method for parsing a date from a string into a Date
 	 *
 	 * @param dateVal the date value ot parse
 	 * @return the resulting date object
+	 * @deprecated as of 3.1.0, as this only accepts yyyy-MM-dd HH:mm:ss in the server's default
+	 *             timezone. REST date parameters now use ConversionUtil.convert(String, Date.class).
 	 */
+	@Deprecated
 	public static Date parseDate(String dateVal) {
 		try {
 			return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(dateVal);
