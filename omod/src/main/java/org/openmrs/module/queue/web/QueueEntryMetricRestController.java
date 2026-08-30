@@ -13,16 +13,24 @@ import javax.servlet.http.HttpServletRequest;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.openmrs.Concept;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
+import org.openmrs.module.queue.api.search.QueueSearchCriteria;
+import org.openmrs.module.queue.model.Queue;
 import org.openmrs.module.queue.model.QueueEntry;
 import org.openmrs.module.queue.utils.QueueUtils;
 import org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
+import org.openmrs.module.webservices.rest.web.representation.CustomRepresentation;
+import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -42,6 +50,22 @@ public class QueueEntryMetricRestController extends BaseRestController {
 	public static final String COUNT = "count";
 	
 	public static final String AVERAGE_WAIT_TIME = "averageWaitTime";
+	
+	public static final String AVERAGE_OPEN_WAIT_TIME = "averageOpenWaitTime";
+	
+	public static final String LONGEST_OPEN_WAIT = "longestOpenWait";
+	
+	public static final String COUNTS_BY_STATUS = "countsByStatus";
+	
+	public static final String GROUP_BY = "groupBy";
+	
+	public static final String QUEUE = "queue";
+	
+	public static final String QUEUES = "queues";
+	
+	// Narrower than REF, which for a queue entry also carries the queue, status, visit and priority,
+	// each a lazy load, for every queue reported on
+	private static final String LONGEST_OPEN_WAIT_REP = "uuid,display,startedAt,patient:(uuid,display)";
 	
 	private final QueueEntrySearchCriteriaParser searchCriteriaParser;
 	
@@ -66,20 +90,104 @@ public class QueueEntryMetricRestController extends BaseRestController {
 		
 		QueueEntrySearchCriteria criteria = searchCriteriaParser.constructFromRequest(parameters);
 		
+		String[] groupByArray = parameters.get(GROUP_BY);
+		boolean groupByQueue = groupByArray != null && Arrays.asList(groupByArray).contains(QUEUE);
+		
 		// If we only want count, then use the ore efficient service to get counts
-		if (metrics.size() == 1 && metrics.get(0).equals(COUNT)) {
+		if (!groupByQueue && metrics.size() == 1 && metrics.get(0).equals(COUNT)) {
 			ret.add(COUNT, services.getQueueEntryService().getCountOfQueueEntries(criteria).intValue());
 		} else {
 			List<QueueEntry> queueEntries = services.getQueueEntryService().getQueueEntries(criteria);
-			if (metrics.isEmpty() || metrics.contains(COUNT)) {
-				ret.add(COUNT, queueEntries.size());
-			}
-			if (metrics.isEmpty() || metrics.contains(AVERAGE_WAIT_TIME)) {
-				ret.add(AVERAGE_WAIT_TIME, QueueUtils.computeAverageWaitTimeInMinutes(queueEntries));
+			// One instant for every duration, so the per-queue figures and the totals cannot disagree
+			Date asOf = new Date();
+			addMetrics(ret, queueEntries, metrics, asOf);
+			if (groupByQueue) {
+				ret.add(QUEUES, getMetricsPerQueue(queueEntries, criteria, metrics, asOf));
 			}
 		}
 		
 		return ret;
+	}
+	
+	// Adds the requested metrics, or all of them if none were requested
+	private void addMetrics(SimpleObject target, List<QueueEntry> queueEntries, List<String> metrics, Date asOf) {
+		if (metrics.isEmpty() || metrics.contains(COUNT)) {
+			target.add(COUNT, queueEntries.size());
+		}
+		if (metrics.isEmpty() || metrics.contains(AVERAGE_WAIT_TIME)) {
+			target.add(AVERAGE_WAIT_TIME, QueueUtils.computeAverageWaitTimeInMinutes(queueEntries));
+		}
+		// Unlike the two above, these are only reported when asked for, so that a caller that names no
+		// metric keeps receiving exactly what it received before they existed
+		if (metrics.contains(AVERAGE_OPEN_WAIT_TIME)) {
+			target.add(AVERAGE_OPEN_WAIT_TIME, QueueUtils.computeAverageOpenWaitTimeInMinutes(queueEntries, asOf));
+		}
+		if (metrics.contains(LONGEST_OPEN_WAIT)) {
+			target.add(LONGEST_OPEN_WAIT, getLongestOpenWait(queueEntries, asOf));
+		}
+		if (metrics.contains(COUNTS_BY_STATUS)) {
+			target.add(COUNTS_BY_STATUS, getCountsByStatus(queueEntries));
+		}
+	}
+	
+	private SimpleObject getLongestOpenWait(List<QueueEntry> queueEntries, Date asOf) {
+		QueueEntry longestWaiting = QueueUtils.findLongestOpenWait(queueEntries);
+		if (longestWaiting == null) {
+			return null;
+		}
+		SimpleObject ret = new SimpleObject();
+		ret.add("minutes", QueueUtils.computeOpenWaitTimeInMinutes(longestWaiting, asOf));
+		ret.add("queueEntry",
+		    ConversionUtil.convertToRepresentation(longestWaiting, new CustomRepresentation(LONGEST_OPEN_WAIT_REP)));
+		return ret;
+	}
+	
+	// Keyed by status concept rather than by particular named statuses, as which statuses matter is a
+	// matter of configuration in the calling application rather than something this module fixes
+	private Map<String, Integer> getCountsByStatus(List<QueueEntry> queueEntries) {
+		Map<String, Integer> ret = new LinkedHashMap<>();
+		for (QueueEntry queueEntry : queueEntries) {
+			Concept status = queueEntry.getStatus();
+			if (status != null) {
+				ret.merge(status.getUuid(), 1, Integer::sum);
+			}
+		}
+		return ret;
+	}
+	
+	// Seeded from the queues so that a queue nobody is in still reports a row of zeroes, then extended
+	// by the entries so that everything counted in the totals is also counted in a row: the queue
+	// search excludes retired queues, while the queue entry search has no such filter.
+	private List<SimpleObject> getMetricsPerQueue(List<QueueEntry> queueEntries, QueueEntrySearchCriteria criteria,
+	        List<String> metrics, Date asOf) {
+		Map<Queue, List<QueueEntry>> entriesByQueue = new LinkedHashMap<>();
+		for (Queue queue : getQueuesToReport(criteria)) {
+			entriesByQueue.put(queue, new ArrayList<>());
+		}
+		for (QueueEntry queueEntry : queueEntries) {
+			entriesByQueue.computeIfAbsent(queueEntry.getQueue(), q -> new ArrayList<>()).add(queueEntry);
+		}
+		
+		List<SimpleObject> ret = new ArrayList<>();
+		for (Map.Entry<Queue, List<QueueEntry>> e : entriesByQueue.entrySet()) {
+			SimpleObject queueMetrics = new SimpleObject();
+			// Default rather than ref, as it carries the queue's location and service
+			queueMetrics.add(QUEUE, ConversionUtil.convertToRepresentation(e.getKey(), Representation.DEFAULT));
+			addMetrics(queueMetrics, e.getValue(), metrics, asOf);
+			ret.add(queueMetrics);
+		}
+		return ret;
+	}
+	
+	// Queues are limited by those criteria they share with the queue entry search
+	private List<Queue> getQueuesToReport(QueueEntrySearchCriteria criteria) {
+		if (criteria.getQueues() != null) {
+			return new ArrayList<>(criteria.getQueues());
+		}
+		QueueSearchCriteria queueSearchCriteria = new QueueSearchCriteria();
+		queueSearchCriteria.setLocations(criteria.getLocations());
+		queueSearchCriteria.setServices(criteria.getServices());
+		return services.getQueueService().getQueues(queueSearchCriteria);
 	}
 	
 	@Override

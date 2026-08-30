@@ -80,6 +80,67 @@ public class QueueUtils {
 	}
 	
 	/**
+	 * Measures those still waiting, unlike {@link #computeAverageWaitTimeInMinutes(List)}, which
+	 * averages waits that have already finished
+	 *
+	 * @param queueEntries the QueueEntries to check
+	 * @param asOf the point in time to measure the open durations against
+	 * @return the average duration, in minutes, between startedAt and asOf for entries that have a
+	 *         startedAt and no endedAt, or null if there are no such entries
+	 */
+	public static Double computeAverageOpenWaitTimeInMinutes(List<QueueEntry> queueEntries, Date asOf) {
+		if (queueEntries != null) {
+			double totalWaitTime = 0.0;
+			int numEntries = 0;
+			for (QueueEntry e : queueEntries) {
+				Long waitTime = computeOpenWaitTimeInMinutes(e, asOf);
+				if (waitTime != null) {
+					totalWaitTime += waitTime;
+					numEntries++;
+				}
+			}
+			// Returning 0.0 here would be indistinguishable from a genuine zero-minute wait
+			if (numEntries > 0) {
+				return totalWaitTime / numEntries;
+			}
+		}
+		return null;
+	}
+	
+	/**
+	 * @param queueEntry the QueueEntry to measure
+	 * @param asOf the point in time to measure the open duration against
+	 * @return how long the entry has been waiting, in minutes, or null if it has no startedAt or has
+	 *         already ended
+	 */
+	public static Long computeOpenWaitTimeInMinutes(QueueEntry queueEntry, Date asOf) {
+		if (queueEntry == null || asOf == null || queueEntry.getStartedAt() == null || queueEntry.getEndedAt() != null) {
+			return null;
+		}
+		// Measured between instants rather than between local date times, so that a wait spanning a
+		// daylight saving change reports the time that actually elapsed
+		return Duration.between(queueEntry.getStartedAt().toInstant(), asOf.toInstant()).toMinutes();
+	}
+	
+	/**
+	 * @param queueEntries the QueueEntries to check
+	 * @return the entry that has a startedAt, has no endedAt, and started earliest, or null if there is
+	 *         no such entry
+	 */
+	public static QueueEntry findLongestOpenWait(List<QueueEntry> queueEntries) {
+		QueueEntry longestWaiting = null;
+		if (queueEntries != null) {
+			for (QueueEntry e : queueEntries) {
+				if (e.getStartedAt() != null && e.getEndedAt() == null
+				        && (longestWaiting == null || e.getStartedAt().before(longestWaiting.getStartedAt()))) {
+					longestWaiting = e;
+				}
+			}
+		}
+		return longestWaiting;
+	}
+	
+	/**
 	 * @param startDate1, endDate1 - the start and end date of one timeframe
 	 * @param startDate2, endDate2 - the start and end date of second timeframe
 	 * @return boolean - indicating whether the timeframes overlap

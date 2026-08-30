@@ -13,19 +13,31 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.AVERAGE_OPEN_WAIT_TIME;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.AVERAGE_WAIT_TIME;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.COUNT;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.COUNTS_BY_STATUS;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.GROUP_BY;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.LONGEST_OPEN_WAIT;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUE;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUES;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STATUS;
 
 import javax.servlet.http.HttpServletRequest;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +61,11 @@ import org.openmrs.module.queue.api.QueueService;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.RoomProviderMapService;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
+import org.openmrs.module.queue.model.Queue;
+import org.openmrs.module.queue.model.QueueEntry;
 import org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser;
 import org.openmrs.module.webservices.rest.SimpleObject;
+import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestUtil;
 
 @ExtendWith(MockitoExtension.class)
@@ -86,6 +101,8 @@ public class QueueEntryMetricRestControllerTest {
 	
 	private MockedStatic<Context> context;
 	
+	private MockedStatic<ConversionUtil> conversionUtil;
+	
 	HttpServletRequest request;
 	
 	Map<String, String[]> parameterMap;
@@ -96,6 +113,10 @@ public class QueueEntryMetricRestControllerTest {
 	public void prepareMocks() {
 		restUtil = mockStatic(RestUtil.class);
 		context = mockStatic(Context.class);
+		// The controller embeds refs to the queue and to the longest-waiting entry; converting those
+		// needs the REST framework, so stand in a marker and assert on the metrics themselves
+		conversionUtil = mockStatic(ConversionUtil.class, withSettings().lenient());
+		conversionUtil.when(() -> ConversionUtil.convertToRepresentation(any(), any())).thenAnswer(i -> i.getArgument(0));
 		lenient().when(queueServicesWrapper.getQueueService()).thenReturn(queueService);
 		lenient().when(queueServicesWrapper.getQueueEntryService()).thenReturn(queueEntryService);
 		lenient().when(queueServicesWrapper.getQueueRoomService()).thenReturn(queueRoomService);
@@ -120,13 +141,14 @@ public class QueueEntryMetricRestControllerTest {
 		parameterMap = new HashMap<>();
 		when(request.getParameterMap()).thenReturn(parameterMap);
 		queueEntryArgumentCaptor = ArgumentCaptor.forClass(QueueEntrySearchCriteria.class);
-		when(queueEntryService.getCountOfQueueEntries(any())).thenReturn(50L);
+		lenient().when(queueEntryService.getCountOfQueueEntries(any())).thenReturn(50L);
 	}
 	
 	@AfterEach
 	public void cleanup() {
 		restUtil.close();
 		context.close();
+		conversionUtil.close();
 	}
 	
 	@Test
@@ -142,5 +164,142 @@ public class QueueEntryMetricRestControllerTest {
 		QueueEntrySearchCriteria criteria = queueEntryArgumentCaptor.getValue();
 		assertThat(criteria.getStatuses(), hasSize(2));
 		assertThat(criteria.getStatuses(), containsInAnyOrder(vals.get(0), vals.get(1)));
+	}
+	
+	@Test
+	public void shouldReportOnlyTheOriginalMetricsWhenNoneAreNamed() {
+		when(queueEntryService.getQueueEntries(any())).thenReturn(Collections.emptyList());
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		// The metrics added since are reported only on request, so that a caller naming none keeps
+		// receiving exactly what it received before they existed
+		assertThat(result.keySet(), containsInAnyOrder(COUNT, AVERAGE_WAIT_TIME));
+	}
+	
+	@Test
+	public void shouldStillGroupByQueueWhenOnlyTheCountIsAskedFor() {
+		Queue triage = queue("Triage");
+		when(queueService.getQueues(any())).thenReturn(Collections.singletonList(triage));
+		when(queueEntryService.getQueueEntries(any()))
+		        .thenReturn(Collections.singletonList(entry(triage, minutesAgo(10), null)));
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		// Counting alone is otherwise served by a cheaper query that cannot break the total down
+		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
+		assertThat(queues, hasSize(1));
+		assertThat(queues.get(0).get(COUNT), equalTo(1));
+	}
+	
+	@Test
+	public void shouldReturnMetricsForEachQueueWhenGroupingByQueue() {
+		Queue triage = queue("Triage");
+		Queue pharmacy = queue("Pharmacy");
+		when(queueService.getQueues(any())).thenReturn(Arrays.asList(triage, pharmacy));
+		when(queueEntryService.getQueueEntries(any()))
+		        .thenReturn(Arrays.asList(entry(triage, minutesAgo(30), null), entry(triage, minutesAgo(10), null)));
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC,
+		    new String[] { COUNT, AVERAGE_OPEN_WAIT_TIME, LONGEST_OPEN_WAIT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		assertThat(result.get(COUNT), equalTo(2));
+		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
+		assertThat(queues, hasSize(2));
+		assertThat(queues.get(0).get(COUNT), equalTo(2));
+		// A queue that nobody is in still gets a row, rather than dropping out of the list entirely
+		assertThat(queues.get(1).get(COUNT), equalTo(0));
+		assertThat(queues.get(1).get(AVERAGE_OPEN_WAIT_TIME), is(nullValue()));
+		assertThat(queues.get(1).get(LONGEST_OPEN_WAIT), is(nullValue()));
+	}
+	
+	@Test
+	public void shouldGiveARowToAQueueTheQueueSearchDoesNotReturn() {
+		Queue triage = queue("Triage");
+		// A retired queue is the real case: the queue search excludes those, the queue entry search does
+		// not, so its entries would count towards the total while belonging to no row
+		Queue missingFromQueueSearch = queue("Retired triage");
+		when(queueService.getQueues(any())).thenReturn(Collections.singletonList(triage));
+		when(queueEntryService.getQueueEntries(any())).thenReturn(
+		    Arrays.asList(entry(triage, minutesAgo(30), null), entry(missingFromQueueSearch, minutesAgo(10), null)));
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
+		assertThat(queues, hasSize(2));
+		assertThat(result.get(COUNT), equalTo(2));
+		assertThat(queues.get(0).get(COUNT), equalTo(1));
+		assertThat(queues.get(1).get(COUNT), equalTo(1));
+	}
+	
+	@Test
+	public void shouldMeasureOpenWaitsSeparatelyFromCompletedOnes() {
+		Queue triage = queue("Triage");
+		when(queueEntryService.getQueueEntries(any())).thenReturn(Arrays.asList(
+		    // Still waiting, for 40 and 20 minutes so far, averaging 30
+		    entry(triage, minutesAgo(40), null), entry(triage, minutesAgo(20), null),
+		    // Already seen after a 10 minute wait, so it counts towards the completed average only
+		    entry(triage, minutesAgo(70), minutesAgo(60))));
+		parameterMap.put(QueueEntryMetricRestController.METRIC,
+		    new String[] { AVERAGE_WAIT_TIME, AVERAGE_OPEN_WAIT_TIME, LONGEST_OPEN_WAIT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		assertThat((Double) result.get(AVERAGE_WAIT_TIME), equalTo(10.0));
+		assertThat((Double) result.get(AVERAGE_OPEN_WAIT_TIME), equalTo(30.0));
+		SimpleObject longestOpenWait = (SimpleObject) result.get(LONGEST_OPEN_WAIT);
+		assertThat(longestOpenWait, is(notNullValue()));
+		assertThat((Long) longestOpenWait.get("minutes"), equalTo(40L));
+	}
+	
+	@Test
+	public void shouldCountEntriesByStatusConcept() {
+		Queue triage = queue("Triage");
+		Concept waiting = concept("waiting-uuid");
+		Concept inService = concept("in-service-uuid");
+		QueueEntry first = entry(triage, minutesAgo(10), null);
+		first.setStatus(waiting);
+		QueueEntry second = entry(triage, minutesAgo(20), null);
+		second.setStatus(waiting);
+		QueueEntry third = entry(triage, minutesAgo(5), null);
+		third.setStatus(inService);
+		when(queueEntryService.getQueueEntries(any())).thenReturn(Arrays.asList(first, second, third));
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNTS_BY_STATUS });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		Map<String, Integer> countsByStatus = (Map<String, Integer>) result.get(COUNTS_BY_STATUS);
+		assertThat(countsByStatus.get("waiting-uuid"), equalTo(2));
+		assertThat(countsByStatus.get("in-service-uuid"), equalTo(1));
+	}
+	
+	private Queue queue(String name) {
+		Queue queue = new Queue();
+		queue.setName(name);
+		return queue;
+	}
+	
+	private Concept concept(String uuid) {
+		Concept concept = new Concept();
+		concept.setUuid(uuid);
+		return concept;
+	}
+	
+	private QueueEntry entry(Queue queue, Date startedAt, Date endedAt) {
+		QueueEntry queueEntry = new QueueEntry();
+		queueEntry.setQueue(queue);
+		queueEntry.setStartedAt(startedAt);
+		queueEntry.setEndedAt(endedAt);
+		return queueEntry;
+	}
+	
+	private Date minutesAgo(int minutes) {
+		return new Date(System.currentTimeMillis() - (minutes * 60L * 1000L));
 	}
 }
