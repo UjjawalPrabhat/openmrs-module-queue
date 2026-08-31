@@ -154,7 +154,10 @@ public class QueueEntryServiceTest extends BaseModuleContextSensitiveTest {
 		
 		QueueEntry reopened = queueEntryService.undoTransition(newEntry);
 		assertThat(reopened.getQueueEntryId(), is(entry3.getQueueEntryId()));
-		assertThat(newEntry.getPreviousQueueEntry(), is(nullValue()));
+		Context.flushSession();
+		Context.clearSession();
+		assertThat(queueEntryService.getQueueEntryById(newEntry.getQueueEntryId()).get().getPreviousQueueEntry(),
+		    is(nullValue()));
 	}
 	
 	@Test

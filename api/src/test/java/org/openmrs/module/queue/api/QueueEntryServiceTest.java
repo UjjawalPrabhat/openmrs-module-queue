@@ -153,6 +153,12 @@ public class QueueEntryServiceTest {
 		QueueEntry result = queueEntryService.saveQueueEntry(newEntry);
 		
 		assertThat(result.getPreviousQueueEntry(), equalTo(prevEntry));
+		verify(dao).getQueueEntries(queueEntrySearchCriteriaArgumentCaptor.capture());
+		QueueEntrySearchCriteria criteria = queueEntrySearchCriteriaArgumentCaptor.getValue();
+		assertThat(criteria.getPatient(), equalTo(newEntry.getPatient()));
+		assertThat(criteria.getVisit(), equalTo(newEntry.getVisit()));
+		assertThat(criteria.getEndedOn(), equalTo(newEntry.getStartedAt()));
+		assertThat(criteria.getQueues(), equalTo(Collections.singletonList(newEntry.getQueueComingFrom())));
 	}
 	
 	@Test

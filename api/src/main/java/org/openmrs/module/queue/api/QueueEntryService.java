@@ -64,12 +64,14 @@ public interface QueueEntryService {
 	/**
 	 * Given a specified queue entry Q, return the previous queue entry recorded against it. This is set
 	 * when Q is created, either directly by a transition or, for a queue entry saved with a
-	 * queueComingFrom, by looking up the entry P with the same patient and visit as Q, whose endedAt
-	 * time is the same as Q.startedAt time, and whose queue is Q.queueComingFrom
+	 * queueComingFrom, by looking up the entry P with the same patient and, when Q has a visit, the
+	 * same visit as Q, whose endedAt time is the same as Q.startedAt time, and whose queue is
+	 * Q.queueComingFrom
 	 *
 	 * @param queueEntry
-	 * @return the previous queue entry, null if there is none, if it could not be identified
-	 *         unambiguously when the queue entry was created, or if it has since been voided.
+	 * @return the previous queue entry recorded against this entry. Returns null when no predecessor
+	 *         was recorded at creation (no match, or more than one match), or when the recorded
+	 *         predecessor is voided.
 	 */
 	@Authorized(PrivilegeConstants.GET_QUEUE_ENTRIES)
 	QueueEntry getPreviousQueueEntry(@NotNull QueueEntry queueEntry);
