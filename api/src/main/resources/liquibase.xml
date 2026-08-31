@@ -749,6 +749,55 @@
         </sql>
     </changeSet>
 
+    <changeSet id="add_queue_entry_queue_ended_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_queue_ended_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on (queue_id, ended_at)</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_queue_ended_idx">
+            <column name="queue_id"/>
+            <column name="ended_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_ended_at_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_ended_at_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on ended_at</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_ended_at_idx">
+            <column name="ended_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_started_at_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_started_at_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on started_at</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_started_at_idx">
+            <column name="started_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_patient_id_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" columnNames="patient_id"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on patient_id</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_patient_id_idx">
+            <column name="patient_id"/>
+        </createIndex>
+    </changeSet>
+
     <changeSet id="add_previous_queue_entry_to_queue_entry_20260613" author="ujjawalprabhat">
         <preConditions onError="WARN" onFail="MARK_RAN">
             <tableExists tableName="queue_entry"/>
@@ -760,6 +809,16 @@
         <addColumn tableName="queue_entry">
             <column name="previous_queue_entry" type="int"/>
         </addColumn>
+    </changeSet>
+
+    <changeSet id="add_previous_queue_entry_fk_20260613" author="ujjawalprabhat">
+        <preConditions onError="WARN" onFail="MARK_RAN">
+            <columnExists tableName="queue_entry" columnName="previous_queue_entry"/>
+            <not><foreignKeyConstraintExists foreignKeyTableName="queue_entry" foreignKeyName="queue_entry_previous_queue_entry_fk"/></not>
+        </preConditions>
+        <comment>
+            Add foreign key from queue_entry.previous_queue_entry to queue_entry.queue_entry_id
+        </comment>
         <addForeignKeyConstraint baseColumnNames="previous_queue_entry" baseTableName="queue_entry" constraintName="queue_entry_previous_queue_entry_fk" onDelete="SET NULL" onUpdate="NO ACTION" referencedColumnNames="queue_entry_id" referencedTableName="queue_entry"/>
     </changeSet>
 
