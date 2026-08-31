@@ -13,6 +13,7 @@ import javax.servlet.http.HttpServletRequest;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +31,6 @@ import org.openmrs.module.webservices.rest.SimpleObject;
 import org.openmrs.module.webservices.rest.web.ConversionUtil;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.module.webservices.rest.web.representation.CustomRepresentation;
-import org.openmrs.module.webservices.rest.web.representation.Representation;
 import org.openmrs.module.webservices.rest.web.v1_0.controller.BaseRestController;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -66,6 +66,11 @@ public class QueueEntryMetricRestController extends BaseRestController {
 	// Narrower than REF, which for a queue entry also carries the queue, status, visit and priority,
 	// each a lazy load, for every queue reported on
 	private static final String LONGEST_OPEN_WAIT_REP = "uuid,display,startedAt,patient:(uuid,display)";
+	
+	// Wider than REF, which carries neither the location and service that label a row nor the retired
+	// flag, but narrower than DEFAULT, which also carries the allowed priorities and statuses
+	private static final String QUEUE_REP = "uuid,display,name,description,retired,"
+	        + "location:(uuid,display),service:(uuid,display)";
 	
 	private final QueueEntrySearchCriteriaParser searchCriteriaParser;
 	
@@ -171,23 +176,27 @@ public class QueueEntryMetricRestController extends BaseRestController {
 		List<SimpleObject> ret = new ArrayList<>();
 		for (Map.Entry<Queue, List<QueueEntry>> e : entriesByQueue.entrySet()) {
 			SimpleObject queueMetrics = new SimpleObject();
-			// Default rather than ref, as it carries the queue's location and service
-			queueMetrics.add(QUEUE, ConversionUtil.convertToRepresentation(e.getKey(), Representation.DEFAULT));
+			queueMetrics.add(QUEUE, ConversionUtil.convertToRepresentation(e.getKey(), new CustomRepresentation(QUEUE_REP)));
 			addMetrics(queueMetrics, e.getValue(), metrics, asOf);
 			ret.add(queueMetrics);
 		}
 		return ret;
 	}
 	
-	// Queues are limited by those criteria they share with the queue entry search
+	// Queues are limited by those criteria they share with the queue entry search, and are sorted by
+	// name so that repeating the same request returns the rows in the same order
 	private List<Queue> getQueuesToReport(QueueEntrySearchCriteria criteria) {
+		List<Queue> queues;
 		if (criteria.getQueues() != null) {
-			return new ArrayList<>(criteria.getQueues());
+			queues = new ArrayList<>(criteria.getQueues());
+		} else {
+			QueueSearchCriteria queueSearchCriteria = new QueueSearchCriteria();
+			queueSearchCriteria.setLocations(criteria.getLocations());
+			queueSearchCriteria.setServices(criteria.getServices());
+			queues = new ArrayList<>(services.getQueueService().getQueues(queueSearchCriteria));
 		}
-		QueueSearchCriteria queueSearchCriteria = new QueueSearchCriteria();
-		queueSearchCriteria.setLocations(criteria.getLocations());
-		queueSearchCriteria.setServices(criteria.getServices());
-		return services.getQueueService().getQueues(queueSearchCriteria);
+		queues.sort(Comparator.comparing(Queue::getName));
+		return queues;
 	}
 	
 	@Override

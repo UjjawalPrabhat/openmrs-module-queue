@@ -110,16 +110,17 @@ public class QueueUtils {
 	/**
 	 * @param queueEntry the QueueEntry to measure
 	 * @param asOf the point in time to measure the open duration against
-	 * @return how long the entry has been waiting, in minutes, or null if it has no startedAt or has
-	 *         already ended
+	 * @return how long the entry has been waiting, in minutes, never negative, or null if it has no
+	 *         startedAt or has already ended
 	 */
 	public static Long computeOpenWaitTimeInMinutes(QueueEntry queueEntry, Date asOf) {
 		if (queueEntry == null || asOf == null || queueEntry.getStartedAt() == null || queueEntry.getEndedAt() != null) {
 			return null;
 		}
 		// Measured between instants rather than between local date times, so that a wait spanning a
-		// daylight saving change reports the time that actually elapsed
-		return Duration.between(queueEntry.getStartedAt().toInstant(), asOf.toInstant()).toMinutes();
+		// daylight saving change reports the time that actually elapsed. Floored at zero, so that an
+		// entry with a startedAt in the future reports as not yet waiting rather than as negative
+		return Math.max(0, Duration.between(queueEntry.getStartedAt().toInstant(), asOf.toInstant()).toMinutes());
 	}
 	
 	/**

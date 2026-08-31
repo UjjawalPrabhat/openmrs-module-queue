@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
@@ -31,6 +32,7 @@ import static org.openmrs.module.queue.web.QueueEntryMetricRestController.GROUP_
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.LONGEST_OPEN_WAIT;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUE;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUES;
+import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_QUEUE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STATUS;
 
 import javax.servlet.http.HttpServletRequest;
@@ -61,6 +63,7 @@ import org.openmrs.module.queue.api.QueueService;
 import org.openmrs.module.queue.api.QueueServicesWrapper;
 import org.openmrs.module.queue.api.RoomProviderMapService;
 import org.openmrs.module.queue.api.search.QueueEntrySearchCriteria;
+import org.openmrs.module.queue.api.search.QueueSearchCriteria;
 import org.openmrs.module.queue.model.Queue;
 import org.openmrs.module.queue.model.QueueEntry;
 import org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser;
@@ -113,8 +116,9 @@ public class QueueEntryMetricRestControllerTest {
 	public void prepareMocks() {
 		restUtil = mockStatic(RestUtil.class);
 		context = mockStatic(Context.class);
-		// The controller embeds refs to the queue and to the longest-waiting entry; converting those
-		// needs the REST framework, so stand in a marker and assert on the metrics themselves
+		// The controller adds representations of the queue and of the longest-waiting entry to the
+		// response. The conversion needs the REST framework, and this test does not have it.
+		// The mock returns its input unchanged. The assertions examine only the metric values.
 		conversionUtil = mockStatic(ConversionUtil.class, withSettings().lenient());
 		conversionUtil.when(() -> ConversionUtil.convertToRepresentation(any(), any())).thenAnswer(i -> i.getArgument(0));
 		lenient().when(queueServicesWrapper.getQueueService()).thenReturn(queueService);
@@ -210,11 +214,48 @@ public class QueueEntryMetricRestControllerTest {
 		assertThat(result.get(COUNT), equalTo(2));
 		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
 		assertThat(queues, hasSize(2));
-		assertThat(queues.get(0).get(COUNT), equalTo(2));
+		// Rows come back sorted by queue name, whatever order the queue search returned them in
+		assertThat(((Queue) queues.get(0).get(QUEUE)).getName(), equalTo("Pharmacy"));
+		assertThat(((Queue) queues.get(1).get(QUEUE)).getName(), equalTo("Triage"));
+		assertThat(queues.get(1).get(COUNT), equalTo(2));
 		// A queue that nobody is in still gets a row, rather than dropping out of the list entirely
-		assertThat(queues.get(1).get(COUNT), equalTo(0));
-		assertThat(queues.get(1).get(AVERAGE_OPEN_WAIT_TIME), is(nullValue()));
-		assertThat(queues.get(1).get(LONGEST_OPEN_WAIT), is(nullValue()));
+		assertThat(queues.get(0).get(COUNT), equalTo(0));
+		assertThat(queues.get(0).get(AVERAGE_OPEN_WAIT_TIME), is(nullValue()));
+		assertThat(queues.get(0).get(LONGEST_OPEN_WAIT), is(nullValue()));
+	}
+	
+	@Test
+	public void shouldReportOnlyTheQueuesAskedForWhenTheRequestNamesThem() {
+		Queue triage = queue("Triage");
+		String[] refs = new String[] { "triage-uuid" };
+		when(queueServicesWrapper.getQueues(refs)).thenReturn(Collections.singletonList(triage));
+		when(queueEntryService.getQueueEntries(any()))
+		        .thenReturn(Collections.singletonList(entry(triage, minutesAgo(10), null)));
+		parameterMap.put(SEARCH_PARAM_QUEUE, refs);
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
+		assertThat(queues, hasSize(1));
+		assertThat(((Queue) queues.get(0).get(QUEUE)).getName(), equalTo("Triage"));
+		assertThat(queues.get(0).get(COUNT), equalTo(1));
+		// The request has already named the queues, so there is nothing for the queue search to add
+		verify(queueService, never()).getQueues(any(QueueSearchCriteria.class));
+	}
+	
+	@Test
+	public void shouldIgnoreAnUnknownGroupByValue() {
+		parameterMap.put(GROUP_BY, new String[] { "Queue" });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		// An unrecognized groupBy value keeps the flat response and the count fast path
+		assertThat(result.keySet(), containsInAnyOrder(COUNT));
+		assertThat(result.get(COUNT), equalTo(50));
+		verify(queueEntryService).getCountOfQueueEntries(any());
 	}
 	
 	@Test

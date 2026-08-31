@@ -126,6 +126,8 @@ public class QueueUtilsTest {
 		assertThat(QueueUtils.computeOpenWaitTimeInMinutes(entry(NULL, NULL), AUG_2), is(nullValue()));
 		assertThat(QueueUtils.computeOpenWaitTimeInMinutes(null, AUG_2), is(nullValue()));
 		assertThat(QueueUtils.computeOpenWaitTimeInMinutes(entry(AUG_1, NULL), NULL), is(nullValue()));
+		// An entry whose startedAt is in the future has not started waiting yet
+		assertThat(QueueUtils.computeOpenWaitTimeInMinutes(entry(AUG_2, NULL), AUG_1), is(0L));
 	}
 	
 	@Test
