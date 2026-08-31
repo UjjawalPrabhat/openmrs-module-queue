@@ -749,4 +749,53 @@
         </sql>
     </changeSet>
 
+    <changeSet id="add_queue_entry_queue_ended_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_queue_ended_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on (queue_id, ended_at)</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_queue_ended_idx">
+            <column name="queue_id"/>
+            <column name="ended_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_ended_at_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_ended_at_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on ended_at</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_ended_at_idx">
+            <column name="ended_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_started_at_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" indexName="queue_entry_started_at_idx"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on started_at</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_started_at_idx">
+            <column name="started_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="add_queue_entry_patient_id_index_20260605" author="ujjawalprabhat">
+        <preConditions onFail="MARK_RAN" onError="WARN">
+            <not>
+                <indexExists tableName="queue_entry" columnNames="patient_id"/>
+            </not>
+        </preConditions>
+        <comment>Add index to queue_entry on patient_id</comment>
+        <createIndex tableName="queue_entry" indexName="queue_entry_patient_id_idx">
+            <column name="patient_id"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>
