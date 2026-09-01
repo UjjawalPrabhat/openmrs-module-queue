@@ -32,6 +32,7 @@ import static org.openmrs.module.queue.web.QueueEntryMetricRestController.GROUP_
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.LONGEST_OPEN_WAIT;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUE;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUES;
+import static org.openmrs.module.queue.web.QueueEntryMetricRestController.WAIT_STATUS;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_QUEUE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STATUS;
 
@@ -318,6 +319,31 @@ public class QueueEntryMetricRestControllerTest {
 		Map<String, Integer> countsByStatus = (Map<String, Integer>) result.get(COUNTS_BY_STATUS);
 		assertThat(countsByStatus.get("waiting-uuid"), equalTo(2));
 		assertThat(countsByStatus.get("in-service-uuid"), equalTo(1));
+	}
+	
+	@Test
+	public void shouldMeasureOpenWaitsOverOnlyTheStatusesNamedAsWaiting() {
+		Queue triage = queue("Triage");
+		Concept waiting = concept("waiting-uuid");
+		Concept inService = concept("in-service-uuid");
+		QueueEntry stillWaiting = entry(triage, minutesAgo(40), null);
+		stillWaiting.setStatus(waiting);
+		// startedAt is reset when an entry is called in, so this one's 5 minutes are time in service
+		QueueEntry beingSeen = entry(triage, minutesAgo(5), null);
+		beingSeen.setStatus(inService);
+		String[] refs = new String[] { "waiting-uuid" };
+		when(queueServicesWrapper.getConcepts(refs)).thenReturn(Collections.singletonList(waiting));
+		when(queueEntryService.getQueueEntries(any())).thenReturn(Arrays.asList(stillWaiting, beingSeen));
+		parameterMap.put(WAIT_STATUS, refs);
+		parameterMap.put(QueueEntryMetricRestController.METRIC,
+		    new String[] { COUNT, AVERAGE_OPEN_WAIT_TIME, LONGEST_OPEN_WAIT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		// The entry being seen is still counted, it is only left out of the two wait measurements
+		assertThat(result.get(COUNT), equalTo(2));
+		assertThat((Double) result.get(AVERAGE_OPEN_WAIT_TIME), equalTo(40.0));
+		assertThat((Long) ((SimpleObject) result.get(LONGEST_OPEN_WAIT)).get("minutes"), equalTo(40L));
 	}
 	
 	private Queue queue(String name) {

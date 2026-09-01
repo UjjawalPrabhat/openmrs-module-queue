@@ -59,6 +59,8 @@ public class QueueEntryMetricRestController extends BaseRestController {
 	
 	public static final String GROUP_BY = "groupBy";
 	
+	public static final String WAIT_STATUS = "waitStatus";
+	
 	public static final String QUEUE = "queue";
 	
 	public static final String QUEUES = "queues";
@@ -105,9 +107,11 @@ public class QueueEntryMetricRestController extends BaseRestController {
 			List<QueueEntry> queueEntries = services.getQueueEntryService().getQueueEntries(criteria);
 			// One instant for every duration, so the per-queue figures and the totals cannot disagree
 			Date asOf = new Date();
-			addMetrics(ret, queueEntries, metrics, asOf);
+			String[] waitStatusArray = parameters.get(WAIT_STATUS);
+			List<Concept> waitStatuses = (waitStatusArray == null ? null : services.getConcepts(waitStatusArray));
+			addMetrics(ret, queueEntries, metrics, asOf, waitStatuses);
 			if (groupByQueue) {
-				ret.add(QUEUES, getMetricsPerQueue(queueEntries, criteria, metrics, asOf));
+				ret.add(QUEUES, getMetricsPerQueue(queueEntries, criteria, metrics, asOf, waitStatuses));
 			}
 		}
 		
@@ -115,24 +119,41 @@ public class QueueEntryMetricRestController extends BaseRestController {
 	}
 	
 	// Adds the requested metrics, or all of them if none were requested
-	private void addMetrics(SimpleObject target, List<QueueEntry> queueEntries, List<String> metrics, Date asOf) {
+	private void addMetrics(SimpleObject target, List<QueueEntry> queueEntries, List<String> metrics, Date asOf,
+	        List<Concept> waitStatuses) {
 		if (metrics.isEmpty() || metrics.contains(COUNT)) {
 			target.add(COUNT, queueEntries.size());
 		}
 		if (metrics.isEmpty() || metrics.contains(AVERAGE_WAIT_TIME)) {
 			target.add(AVERAGE_WAIT_TIME, QueueUtils.computeAverageWaitTimeInMinutes(queueEntries));
 		}
-		// Unlike the two above, these are only reported when asked for, so that a caller that names no
-		// metric keeps receiving exactly what it received before they existed
+		// Unlike the two above, the remaining metrics are only reported when asked for, so that a caller
+		// that names no metric keeps receiving exactly what it received before they existed.
+		// An entry's startedAt is reset when it is called in to be seen, so the two open wait metrics are
+		// measured over only the statuses the caller counts as waiting, where it names any.
+		List<QueueEntry> waitingEntries = filterByStatus(queueEntries, waitStatuses);
 		if (metrics.contains(AVERAGE_OPEN_WAIT_TIME)) {
-			target.add(AVERAGE_OPEN_WAIT_TIME, QueueUtils.computeAverageOpenWaitTimeInMinutes(queueEntries, asOf));
+			target.add(AVERAGE_OPEN_WAIT_TIME, QueueUtils.computeAverageOpenWaitTimeInMinutes(waitingEntries, asOf));
 		}
 		if (metrics.contains(LONGEST_OPEN_WAIT)) {
-			target.add(LONGEST_OPEN_WAIT, getLongestOpenWait(queueEntries, asOf));
+			target.add(LONGEST_OPEN_WAIT, getLongestOpenWait(waitingEntries, asOf));
 		}
 		if (metrics.contains(COUNTS_BY_STATUS)) {
 			target.add(COUNTS_BY_STATUS, getCountsByStatus(queueEntries));
 		}
+	}
+	
+	private List<QueueEntry> filterByStatus(List<QueueEntry> queueEntries, List<Concept> statuses) {
+		if (statuses == null || statuses.isEmpty()) {
+			return queueEntries;
+		}
+		List<QueueEntry> ret = new ArrayList<>();
+		for (QueueEntry queueEntry : queueEntries) {
+			if (statuses.contains(queueEntry.getStatus())) {
+				ret.add(queueEntry);
+			}
+		}
+		return ret;
 	}
 	
 	private SimpleObject getLongestOpenWait(List<QueueEntry> queueEntries, Date asOf) {
@@ -164,7 +185,7 @@ public class QueueEntryMetricRestController extends BaseRestController {
 	// by the entries so that everything counted in the totals is also counted in a row: the queue
 	// search excludes retired queues, while the queue entry search has no such filter.
 	private List<SimpleObject> getMetricsPerQueue(List<QueueEntry> queueEntries, QueueEntrySearchCriteria criteria,
-	        List<String> metrics, Date asOf) {
+	        List<String> metrics, Date asOf, List<Concept> waitStatuses) {
 		Map<Queue, List<QueueEntry>> entriesByQueue = new LinkedHashMap<>();
 		for (Queue queue : getQueuesToReport(criteria)) {
 			entriesByQueue.put(queue, new ArrayList<>());
@@ -177,7 +198,7 @@ public class QueueEntryMetricRestController extends BaseRestController {
 		for (Map.Entry<Queue, List<QueueEntry>> e : entriesByQueue.entrySet()) {
 			SimpleObject queueMetrics = new SimpleObject();
 			queueMetrics.add(QUEUE, ConversionUtil.convertToRepresentation(e.getKey(), new CustomRepresentation(QUEUE_REP)));
-			addMetrics(queueMetrics, e.getValue(), metrics, asOf);
+			addMetrics(queueMetrics, e.getValue(), metrics, asOf, waitStatuses);
 			ret.add(queueMetrics);
 		}
 		return ret;
