@@ -210,6 +210,8 @@ public class QueueEntryMetricRestController extends BaseRestController {
 		List<Queue> queues;
 		if (criteria.getQueues() != null) {
 			queues = new ArrayList<>(criteria.getQueues());
+			// A blank queue ref resolves to a null element
+			queues.removeIf(q -> q == null);
 		} else {
 			QueueSearchCriteria queueSearchCriteria = new QueueSearchCriteria();
 			queueSearchCriteria.setLocations(criteria.getLocations());

@@ -33,7 +33,9 @@ import static org.openmrs.module.queue.web.QueueEntryMetricRestController.LONGES
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUE;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.QUEUES;
 import static org.openmrs.module.queue.web.QueueEntryMetricRestController.WAIT_STATUS;
+import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_LOCATION;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_QUEUE;
+import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_SERVICE;
 import static org.openmrs.module.queue.web.resources.parser.QueueEntrySearchCriteriaParser.SEARCH_PARAM_STATUS;
 
 import javax.servlet.http.HttpServletRequest;
@@ -54,6 +56,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.openmrs.Concept;
+import org.openmrs.Location;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.LocationService;
 import org.openmrs.api.PatientService;
@@ -334,7 +337,9 @@ public class QueueEntryMetricRestControllerTest {
 		String[] refs = new String[] { "waiting-uuid" };
 		when(queueServicesWrapper.getConcepts(refs)).thenReturn(Collections.singletonList(waiting));
 		when(queueEntryService.getQueueEntries(any())).thenReturn(Arrays.asList(stillWaiting, beingSeen));
+		when(queueService.getQueues(any())).thenReturn(Collections.singletonList(triage));
 		parameterMap.put(WAIT_STATUS, refs);
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
 		parameterMap.put(QueueEntryMetricRestController.METRIC,
 		    new String[] { COUNT, AVERAGE_OPEN_WAIT_TIME, LONGEST_OPEN_WAIT });
 		
@@ -344,6 +349,54 @@ public class QueueEntryMetricRestControllerTest {
 		assertThat(result.get(COUNT), equalTo(2));
 		assertThat((Double) result.get(AVERAGE_OPEN_WAIT_TIME), equalTo(40.0));
 		assertThat((Long) ((SimpleObject) result.get(LONGEST_OPEN_WAIT)).get("minutes"), equalTo(40L));
+		// The per-queue rows are measured the same way as the totals
+		SimpleObject triageRow = ((List<SimpleObject>) result.get(QUEUES)).get(0);
+		assertThat(triageRow.get(COUNT), equalTo(2));
+		assertThat((Double) triageRow.get(AVERAGE_OPEN_WAIT_TIME), equalTo(40.0));
+		assertThat((Long) ((SimpleObject) triageRow.get(LONGEST_OPEN_WAIT)).get("minutes"), equalTo(40L));
+	}
+	
+	@Test
+	public void shouldLimitTheQueueSearchToTheRequestedLocationAndService() {
+		Location clinic = new Location();
+		Concept service = concept("service-uuid");
+		String[] locationRefs = new String[] { "clinic-uuid" };
+		String[] serviceRefs = new String[] { "service-uuid" };
+		when(queueServicesWrapper.getLocations(locationRefs)).thenReturn(Collections.singletonList(clinic));
+		when(queueServicesWrapper.getConcepts(serviceRefs)).thenReturn(Collections.singletonList(service));
+		when(queueService.getQueues(any())).thenReturn(Collections.emptyList());
+		when(queueEntryService.getQueueEntries(any())).thenReturn(Collections.emptyList());
+		parameterMap.put(SEARCH_PARAM_LOCATION, locationRefs);
+		parameterMap.put(SEARCH_PARAM_SERVICE, serviceRefs);
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		controller.handleRequest(request);
+		
+		// The rows have to be drawn from the same queues the entries were counted over
+		ArgumentCaptor<QueueSearchCriteria> captor = ArgumentCaptor.forClass(QueueSearchCriteria.class);
+		verify(queueService).getQueues(captor.capture());
+		assertThat(captor.getValue().getLocations(), containsInAnyOrder(clinic));
+		assertThat(captor.getValue().getServices(), containsInAnyOrder(service));
+	}
+	
+	@Test
+	public void shouldSkipABlankQueueRef() {
+		Queue triage = queue("Triage");
+		String[] refs = new String[] { "triage-uuid", "" };
+		// The wrapper resolves a blank ref to a null element
+		when(queueServicesWrapper.getQueues(refs)).thenReturn(Arrays.asList(triage, null));
+		when(queueEntryService.getQueueEntries(any()))
+		        .thenReturn(Collections.singletonList(entry(triage, minutesAgo(10), null)));
+		parameterMap.put(SEARCH_PARAM_QUEUE, refs);
+		parameterMap.put(GROUP_BY, new String[] { QUEUE });
+		parameterMap.put(QueueEntryMetricRestController.METRIC, new String[] { COUNT });
+		
+		SimpleObject result = (SimpleObject) controller.handleRequest(request);
+		
+		List<SimpleObject> queues = (List<SimpleObject>) result.get(QUEUES);
+		assertThat(queues, hasSize(1));
+		assertThat(((Queue) queues.get(0).get(QUEUE)).getName(), equalTo("Triage"));
 	}
 	
 	private Queue queue(String name) {
